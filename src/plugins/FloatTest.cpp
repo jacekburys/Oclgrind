@@ -1,6 +1,8 @@
-// MemCheckUninitialized.h (Oclgrind)
+// FloatTest.h (Oclgrind)
 // Copyright (c) 2015, Moritz Pflanzer
 // Imperial College London. All rights reserved.
+//
+// Based on MemCheckUninitialized plugin by Moritz Pflanzer
 //
 // This program is provided under a three-clause BSD license. For full
 // license terms please see the LICENSE file distributed with this
@@ -928,23 +930,107 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
     switch(instruction->getOpcode())
     {
+    	// FOR FLOAT TEST
+    	case llvm::Instruction::Alloca:
+		{
+			const llvm::AllocaInst *allocaInst = ((const llvm::AllocaInst*)instruction);
+
+			size_t address = result.getPointer();
+
+			shadowValues->setValue(instruction, ShadowContext::getUninitializedValue(instruction));
+
+			TypedValue v = ShadowContext::getUninitializedValue(allocaInst->getAllocatedType());
+			allocAndStoreShadowMemory(AddrSpacePrivate, address, v, workItem);
+			break;
+		}
+
+    	case llvm::Instruction::Store:
+		{
+			PARANOID_CHECK(workItem, instruction);
+			const llvm::StoreInst *storeInst = ((const llvm::StoreInst*)instruction);
+			const llvm::Value *Val = storeInst->getValueOperand();
+			const llvm::Value *Addr = storeInst->getPointerOperand();
+
+			size_t address = workItem->getOperand(Addr).getPointer();
+			unsigned addrSpace = storeInst->getPointerAddressSpace();
+
+			TypedValue shadowVal = storeInst->isAtomic() ? ShadowContext::getCleanValue(Val) :
+														   shadowContext.getValue(workItem, Val);
+			storeShadowMemory(addrSpace, address, shadowVal, workItem);
+
+			// Check shadow of address
+			TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
+
+			if(!ShadowContext::isCleanValue(addrShadow))
+			{
+				logUninitializedAddress(addrSpace, address);
+			}
+			break;
+		}
+
+    	case llvm::Instruction::FAdd:
+		{
+			SimpleOr(workItem, instruction);
+			break;
+		}
+		case llvm::Instruction::FCmp:
+		{
+			SimpleOr(workItem, instruction);
+			break;
+		}
+		case llvm::Instruction::FDiv:
+		{
+			SimpleOr(workItem, instruction);
+			break;
+		}
+		case llvm::Instruction::FMul:
+		{
+			SimpleOr(workItem, instruction);
+			break;
+		}
+		case llvm::Instruction::FSub:
+		{
+			SimpleOr(workItem, instruction);
+			break;
+		}
+
+		case llvm::Instruction::Load:
+		{
+			assert(instruction->getType()->isSized() && "Load type must have size");
+			const llvm::LoadInst *loadInst = ((const llvm::LoadInst*)instruction);
+			const llvm::Value *Addr = loadInst->getPointerOperand();
+
+			size_t address = workItem->getOperand(Addr).getPointer();
+			unsigned addrSpace = loadInst->getPointerAddressSpace();
+
+			TypedValue v = shadowContext.getMemoryPool()->clone(result);
+			loadShadowMemory(addrSpace, address, v, workItem);
+			shadowValues->setValue(instruction, v);
+
+			// Check shadow of address
+			TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
+
+			if(!ShadowContext::isCleanValue(addrShadow))
+			{
+				logUninitializedAddress(addrSpace, address, false);
+			}
+
+//            if (I.isAtomic())
+//                I.setOrdering(addAcquireOrdering(I.getOrdering()));
+
+			break;
+		}
+
+
+		/////////////////////////
+
+/*
         case llvm::Instruction::Add:
         {
             SimpleOr(workItem, instruction);
             break;
         }
-        case llvm::Instruction::Alloca:
-        {
-            const llvm::AllocaInst *allocaInst = ((const llvm::AllocaInst*)instruction);
 
-            size_t address = result.getPointer();
-
-            shadowValues->setValue(instruction, ShadowContext::getCleanValue(instruction));
-
-            TypedValue v = ShadowContext::getPoisonedValue(allocaInst->getAllocatedType());
-            allocAndStoreShadowMemory(AddrSpacePrivate, address, v, workItem);
-            break;
-        }
         case llvm::Instruction::And:
         {
             SimpleOr(workItem, instruction);
@@ -1145,26 +1231,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             shadowValues->setValue(instruction, ResShadow);
             break;
         }
-        case llvm::Instruction::FAdd:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
-        case llvm::Instruction::FCmp:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
-        case llvm::Instruction::FDiv:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
-        case llvm::Instruction::FMul:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
+
         case llvm::Instruction::FPExt:
         {
             SimpleOr(workItem, instruction);
@@ -1190,11 +1257,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             SimpleOr(workItem, instruction);
             break;
         }
-        case llvm::Instruction::FSub:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
+
         case llvm::Instruction::GetElementPtr:
         {
             SimpleOr(workItem, instruction);
@@ -1277,32 +1340,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             shadowValues->setValue(instruction, newShadow);
             break;
         }
-        case llvm::Instruction::Load:
-        {
-            assert(instruction->getType()->isSized() && "Load type must have size");
-            const llvm::LoadInst *loadInst = ((const llvm::LoadInst*)instruction);
-            const llvm::Value *Addr = loadInst->getPointerOperand();
 
-            size_t address = workItem->getOperand(Addr).getPointer();
-            unsigned addrSpace = loadInst->getPointerAddressSpace();
-
-            TypedValue v = shadowContext.getMemoryPool()->clone(result);
-            loadShadowMemory(addrSpace, address, v, workItem);
-            shadowValues->setValue(instruction, v);
-
-            // Check shadow of address
-            TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
-
-            if(!ShadowContext::isCleanValue(addrShadow))
-            {
-                logUninitializedAddress(addrSpace, address, false);
-            }
-
-//            if (I.isAtomic())
-//                I.setOrdering(addAcquireOrdering(I.getOrdering()));
-
-            break;
-        }
         case llvm::Instruction::LShr:
         {
             TypedValue S0 = shadowContext.getValue(workItem, instruction->getOperand(0));
@@ -1525,29 +1563,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             SimpleOr(workItem, instruction);
             break;
         }
-        case llvm::Instruction::Store:
-        {
-            PARANOID_CHECK(workItem, instruction);
-            const llvm::StoreInst *storeInst = ((const llvm::StoreInst*)instruction);
-            const llvm::Value *Val = storeInst->getValueOperand();
-            const llvm::Value *Addr = storeInst->getPointerOperand();
 
-            size_t address = workItem->getOperand(Addr).getPointer();
-            unsigned addrSpace = storeInst->getPointerAddressSpace();
-
-            TypedValue shadowVal = storeInst->isAtomic() ? ShadowContext::getCleanValue(Val) :
-                                                           shadowContext.getValue(workItem, Val);
-            storeShadowMemory(addrSpace, address, shadowVal, workItem);
-
-            // Check shadow of address
-            TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
-
-            if(!ShadowContext::isCleanValue(addrShadow))
-            {
-                logUninitializedAddress(addrSpace, address);
-            }
-            break;
-        }
         case llvm::Instruction::Sub:
         {
             SimpleOr(workItem, instruction);
@@ -1610,8 +1626,10 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             shadowValues->setValue(instruction, newShadow);
             break;
         }
+        */
         default:
-            FATAL_ERROR("Unsupported instruction: %s", instruction->getOpcodeName());
+        	//FATAL_ERROR("Unsupported instruction: %s", instruction->getOpcodeName());
+        	break;
     }
 }
 
@@ -2464,6 +2482,22 @@ TypedValue ShadowContext::getCleanValue(const llvm::Value *V)
     return v;
 }
 
+//for float_test
+TypedValue ShadowContext::getUninitializedValue(const llvm::Value *V)
+{
+    pair<unsigned,unsigned> size = getValueSize(V);
+    TypedValue v = {
+        size.first,
+        size.second,
+        m_workSpace.memoryPool->alloc(size.first*size.second)
+    };
+
+    //memset(v.data, 0, v.size*v.num);
+
+    return v;
+}
+
+
 TypedValue ShadowContext::getCleanValue(const llvm::Type *Ty)
 {
     unsigned size = getTypeSize(Ty);
@@ -2474,6 +2508,21 @@ TypedValue ShadowContext::getCleanValue(const llvm::Type *Ty)
     };
 
     memset(v.data, 0, v.size);
+
+    return v;
+}
+
+// for float_test
+TypedValue ShadowContext::getUninitializedValue(const llvm::Type *Ty)
+{
+    unsigned size = getTypeSize(Ty);
+    TypedValue v = {
+        size,
+        1,
+        m_workSpace.memoryPool->alloc(size)
+    };
+
+    //memset(v.data, 0, v.size);
 
     return v;
 }

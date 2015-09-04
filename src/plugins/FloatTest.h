@@ -1,6 +1,8 @@
-// MemCheckUninitialized.h (Oclgrind)
+// FloatTest.h (Oclgrind)
 // Copyright (c) 2015, Moritz Pflanzer
 // Imperial College London. All rights reserved.
+//
+// Based on MemCheckUninitialized plugin by Moritz Pflanzer
 //
 // This program is provided under a three-clause BSD license. For full
 // license terms please see the LICENSE file distributed with this
@@ -195,6 +197,11 @@ namespace oclgrind
             void dumpGlobalValues() const;
             void freeWorkItems();
             void freeWorkGroups();
+
+            //for float test
+            static TypedValue getUninitializedValue(const llvm::Value *V);
+            static TypedValue getUninitializedValue(const llvm::Type *Ty);
+
             static TypedValue getCleanValue(unsigned size);
             static TypedValue getCleanValue(TypedValue v);
             static TypedValue getCleanValue(const llvm::Type *Ty);
