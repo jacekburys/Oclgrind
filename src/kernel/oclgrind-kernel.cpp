@@ -142,9 +142,9 @@ static bool parseArguments(int argc, char *argv[])
     {
       setEnvironment("OCLGRIND_UNINITIALIZED", "1");
     }
-    else if (!strcmp(argv[i], "--memcheck-uninitialized"))
+    else if (!strcmp(argv[i], "--float-test"))
     {
-      setEnvironment("OCLGRIND_MEMCHECK_UNINITIALIZED", "1");
+      setEnvironment("OCLGRIND_FLOAT_TEST", "1");
     }
     else if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version"))
     {

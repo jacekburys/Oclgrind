@@ -246,11 +246,11 @@ namespace oclgrind
             static THREAD_LOCAL WorkSpace m_workSpace;
     };
 
-    class MemCheckUninitialized : public Plugin
+    class FloatTest : public Plugin
     {
         public:
-            MemCheckUninitialized(const Context *context);
-            virtual ~MemCheckUninitialized();
+            FloatTest(const Context *context);
+            virtual ~FloatTest();
 
             virtual void hostMemoryStore(const Memory *memory,
                     size_t address, size_t size,

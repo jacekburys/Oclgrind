@@ -20,7 +20,7 @@
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Type.h"
 
-#include "MemCheckUninitialized.h"
+#include "FloatTest.h"
 #include <mutex>
 
 using namespace oclgrind;
@@ -41,18 +41,18 @@ static std::mutex atomicShadowMutex[NUM_ATOMIC_MUTEXES];
 
 THREAD_LOCAL ShadowContext::WorkSpace ShadowContext::m_workSpace = {NULL, NULL, NULL, 0};
 
-MemCheckUninitialized::MemCheckUninitialized(const Context *context)
+FloatTest::FloatTest(const Context *context)
  : Plugin(context), shadowContext(sizeof(size_t)==8 ? 32 : 16)
 {
     shadowContext.createMemoryPool();
 }
 
-MemCheckUninitialized::~MemCheckUninitialized()
+FloatTest::~FloatTest()
 {
     shadowContext.destroyMemoryPool();
 }
 
-void MemCheckUninitialized::allocAndStoreShadowMemory(unsigned addrSpace, size_t address, TypedValue SM,
+void FloatTest::allocAndStoreShadowMemory(unsigned addrSpace, size_t address, TypedValue SM,
         const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
 {
     if(addrSpace == AddrSpaceConstant)
@@ -66,7 +66,7 @@ void MemCheckUninitialized::allocAndStoreShadowMemory(unsigned addrSpace, size_t
     storeShadowMemory(addrSpace, address, SM, workItem, workGroup, unchecked);
 }
 
-bool MemCheckUninitialized::checkAllOperandsDefined(const WorkItem *workItem, const llvm::Instruction *I)
+bool FloatTest::checkAllOperandsDefined(const WorkItem *workItem, const llvm::Instruction *I)
 {
     for(llvm::Instruction::const_op_iterator OI = I->op_begin(); OI != I->op_end(); ++OI)
     {
@@ -87,7 +87,7 @@ bool MemCheckUninitialized::checkAllOperandsDefined(const WorkItem *workItem, co
     return true;
 }
 
-void MemCheckUninitialized::checkStructMemcpy(const WorkItem *workItem, const llvm::Value *src)
+void FloatTest::checkStructMemcpy(const WorkItem *workItem, const llvm::Value *src)
 {
     const llvm::PointerType *srcPtrTy = llvm::dyn_cast<llvm::PointerType>(src->getType());
     const llvm::StructType *structTy = llvm::dyn_cast<llvm::StructType>(srcPtrTy->getElementType());
@@ -124,12 +124,12 @@ void MemCheckUninitialized::checkStructMemcpy(const WorkItem *workItem, const ll
     }
 }
 
-void MemCheckUninitialized::copyShadowMemory(unsigned dstAddrSpace, size_t dst, unsigned srcAddrSpace, size_t src, unsigned size, const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
+void FloatTest::copyShadowMemory(unsigned dstAddrSpace, size_t dst, unsigned srcAddrSpace, size_t src, unsigned size, const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
 {
     copyShadowMemoryStrided(dstAddrSpace, dst, srcAddrSpace, src, 1, 1, size, workItem, workGroup, unchecked);
 }
 
-void MemCheckUninitialized::copyShadowMemoryStrided(unsigned dstAddrSpace, size_t dst, unsigned srcAddrSpace, size_t src, size_t num, size_t stride, unsigned size, const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
+void FloatTest::copyShadowMemoryStrided(unsigned dstAddrSpace, size_t dst, unsigned srcAddrSpace, size_t src, size_t num, size_t stride, unsigned size, const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
 {
     TypedValue v = {
         size,
@@ -148,7 +148,7 @@ void MemCheckUninitialized::copyShadowMemoryStrided(unsigned dstAddrSpace, size_
     delete[] v.data;
 }
 
-std::string MemCheckUninitialized::extractUnmangledName(const std::string fullname)
+std::string FloatTest::extractUnmangledName(const std::string fullname)
 {
     // Extract unmangled name
     if(fullname.compare(0,2, "_Z") == 0)
@@ -163,7 +163,7 @@ std::string MemCheckUninitialized::extractUnmangledName(const std::string fullna
     }
 }
 
-ShadowMemory* MemCheckUninitialized::getShadowMemory(unsigned addrSpace,
+ShadowMemory* FloatTest::getShadowMemory(unsigned addrSpace,
         const WorkItem *workItem, const WorkGroup *workGroup) const
 {
     switch(addrSpace)
@@ -200,7 +200,7 @@ ShadowMemory* MemCheckUninitialized::getShadowMemory(unsigned addrSpace,
     }
 }
 
-bool MemCheckUninitialized::handleBuiltinFunction(const WorkItem *workItem, string name,
+bool FloatTest::handleBuiltinFunction(const WorkItem *workItem, string name,
                                                   const llvm::CallInst *CI, const TypedValue result)
 {
     name = extractUnmangledName(name);
@@ -813,7 +813,7 @@ bool MemCheckUninitialized::handleBuiltinFunction(const WorkItem *workItem, stri
     return false;
 }
 
-void MemCheckUninitialized::handleIntrinsicInstruction(const WorkItem *workItem, const llvm::IntrinsicInst *I)
+void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm::IntrinsicInst *I)
 {
     switch (I->getIntrinsicID())
     {
@@ -903,7 +903,7 @@ void MemCheckUninitialized::handleIntrinsicInstruction(const WorkItem *workItem,
     }
 }
 
-void MemCheckUninitialized::hostMemoryStore(const Memory *memory,
+void FloatTest::hostMemoryStore(const Memory *memory,
                              size_t address, size_t size,
                              const uint8_t *storeData)
 {
@@ -914,7 +914,7 @@ void MemCheckUninitialized::hostMemoryStore(const Memory *memory,
     }
 }
 
-void MemCheckUninitialized::instructionExecuted(const WorkItem *workItem,
+void FloatTest::instructionExecuted(const WorkItem *workItem,
                                         const llvm::Instruction *instruction,
                                         const TypedValue& result)
 {
@@ -1615,7 +1615,7 @@ void MemCheckUninitialized::instructionExecuted(const WorkItem *workItem,
     }
 }
 
-void MemCheckUninitialized::kernelBegin(const KernelInvocation *kernelInvocation)
+void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
 {
     const Kernel *kernel = kernelInvocation->getKernel();
 
@@ -1721,7 +1721,7 @@ void MemCheckUninitialized::kernelBegin(const KernelInvocation *kernelInvocation
     }
 }
 
-void MemCheckUninitialized::loadShadowMemory(unsigned addrSpace, size_t address, TypedValue &SM, const WorkItem *workItem, const WorkGroup *workGroup)
+void FloatTest::loadShadowMemory(unsigned addrSpace, size_t address, TypedValue &SM, const WorkItem *workItem, const WorkGroup *workGroup)
 {
     if(addrSpace == AddrSpaceConstant)
     {
@@ -1738,7 +1738,7 @@ void MemCheckUninitialized::loadShadowMemory(unsigned addrSpace, size_t address,
 #endif
 }
 
-void MemCheckUninitialized::logUninitializedAddress(unsigned int addrSpace, size_t address, bool write) const
+void FloatTest::logUninitializedAddress(unsigned int addrSpace, size_t address, bool write) const
 {
   Context::Message msg(WARNING, m_context);
   msg << "Uninitialized address used to " << (write ? "write to " : "read from ")
@@ -1751,7 +1751,7 @@ void MemCheckUninitialized::logUninitializedAddress(unsigned int addrSpace, size
   msg.send();
 }
 
-void MemCheckUninitialized::logUninitializedCF() const
+void FloatTest::logUninitializedCF() const
 {
   Context::Message msg(WARNING, m_context);
   msg << "Controlflow depends on uninitialized value" << endl
@@ -1762,7 +1762,7 @@ void MemCheckUninitialized::logUninitializedCF() const
   msg.send();
 }
 
-void MemCheckUninitialized::logUninitializedIndex() const
+void FloatTest::logUninitializedIndex() const
 {
   Context::Message msg(WARNING, m_context);
   msg << "Instruction depends on an uninitialized index value" << endl
@@ -1773,7 +1773,7 @@ void MemCheckUninitialized::logUninitializedIndex() const
   msg.send();
 }
 
-void MemCheckUninitialized::logUninitializedWrite(unsigned int addrSpace, size_t address) const
+void FloatTest::logUninitializedWrite(unsigned int addrSpace, size_t address) const
 {
   Context::Message msg(WARNING, m_context);
   msg << "Uninitialized value written to "
@@ -1786,7 +1786,7 @@ void MemCheckUninitialized::logUninitializedWrite(unsigned int addrSpace, size_t
   msg.send();
 }
 
-void MemCheckUninitialized::memoryMap(const Memory *memory, size_t address,
+void FloatTest::memoryMap(const Memory *memory, size_t address,
                                       size_t offset, size_t size, cl_map_flags flags)
 {
     if(!(flags & CL_MAP_READ))
@@ -1796,7 +1796,7 @@ void MemCheckUninitialized::memoryMap(const Memory *memory, size_t address,
     }
 }
 
-void MemCheckUninitialized::SimpleOr(const WorkItem *workItem, const llvm::Instruction *I)
+void FloatTest::SimpleOr(const WorkItem *workItem, const llvm::Instruction *I)
 {
     PARANOID_CHECK(workItem, I);
     ShadowValues *shadowValues = shadowContext.getShadowWorkItem(workItem)->getValues();
@@ -1813,7 +1813,7 @@ void MemCheckUninitialized::SimpleOr(const WorkItem *workItem, const llvm::Instr
     shadowValues->setValue(I, ShadowContext::getCleanValue(I));
 }
 
-void MemCheckUninitialized::SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *CI)
+void FloatTest::SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *CI)
 {
     const llvm::Value *Addr = CI->getArgOperand(0);
     unsigned addrSpace = Addr->getType()->getPointerAddressSpace();
@@ -1862,7 +1862,7 @@ void MemCheckUninitialized::SimpleOrAtomic(const WorkItem *workItem, const llvm:
     }
 }
 
-void MemCheckUninitialized::storeShadowMemory(unsigned addrSpace, size_t address, TypedValue SM, const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
+void FloatTest::storeShadowMemory(unsigned addrSpace, size_t address, TypedValue SM, const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
 {
 #ifdef DUMP_SHADOW
     cout << "Store " << hex << SM << " to space " << dec << addrSpace << " at address " << hex << address << endl;
@@ -1886,7 +1886,7 @@ void MemCheckUninitialized::storeShadowMemory(unsigned addrSpace, size_t address
     memory->store(SM.data, address, SM.size*SM.num);
 }
 
-void MemCheckUninitialized::workItemBegin(const WorkItem *workItem)
+void FloatTest::workItemBegin(const WorkItem *workItem)
 {
     shadowContext.createMemoryPool();
     shadowContext.allocateWorkItems();
@@ -1954,14 +1954,14 @@ void MemCheckUninitialized::workItemBegin(const WorkItem *workItem)
     }
 }
 
-void MemCheckUninitialized::workItemComplete(const WorkItem *workItem)
+void FloatTest::workItemComplete(const WorkItem *workItem)
 {
     shadowContext.destroyShadowWorkItem(workItem);
     shadowContext.freeWorkItems();
     shadowContext.destroyMemoryPool();
 }
 
-void MemCheckUninitialized::workGroupBegin(const WorkGroup *workGroup)
+void FloatTest::workGroupBegin(const WorkGroup *workGroup)
 {
     shadowContext.createMemoryPool();
     shadowContext.allocateWorkGroups();
@@ -1990,7 +1990,7 @@ void MemCheckUninitialized::workGroupBegin(const WorkGroup *workGroup)
     }
 }
 
-void MemCheckUninitialized::workGroupComplete(const WorkGroup *workGroup)
+void FloatTest::workGroupComplete(const WorkGroup *workGroup)
 {
     shadowContext.destroyShadowWorkGroup(workGroup);
     shadowContext.freeWorkGroups();
