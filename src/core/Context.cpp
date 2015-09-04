@@ -85,8 +85,11 @@ void Context::loadPlugins()
   if (checkEnv("OCLGRIND_UNINITIALIZED"))
     m_plugins.push_back(make_pair(new Uninitialized(this), true));
 
-  if (checkEnv("OCLGRIND_FLOAT_TEST"))
-    m_plugins.push_back(make_pair(new FloatTest(this), true));
+  if (checkEnv("OCLGRIND_FLOAT_TEST")){
+	  cout << "loaded float-test" << endl;
+	  m_plugins.push_back(make_pair(new FloatTest(this), true));
+  }
+
 
   if (checkEnv("OCLGRIND_INTERACTIVE"))
     m_plugins.push_back(make_pair(new InteractiveDebugger(this), true));

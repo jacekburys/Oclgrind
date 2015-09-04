@@ -928,8 +928,11 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
     ShadowWorkItem *shadowWorkItem = shadowContext.getShadowWorkItem(workItem);
     ShadowValues *shadowValues = shadowWorkItem->getValues();
 
+    cerr << "got instruction" << endl;
+
     switch(instruction->getOpcode())
     {
+
     	// FOR FLOAT TEST
     	case llvm::Instruction::Alloca:
 		{
@@ -954,43 +957,48 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 			size_t address = workItem->getOperand(Addr).getPointer();
 			unsigned addrSpace = storeInst->getPointerAddressSpace();
 
-			TypedValue shadowVal = storeInst->isAtomic() ? ShadowContext::getCleanValue(Val) :
-														   shadowContext.getValue(workItem, Val);
+			//TypedValue shadowVal = storeInst->isAtomic() ? ShadowContext::getCleanValue(Val) :
+			//											   shadowContext.getValue(workItem, Val);
+
+			TypedValue shadowVal = shadowContext.getValue(workItem, Val);
+
 			storeShadowMemory(addrSpace, address, shadowVal, workItem);
 
 			// Check shadow of address
-			TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
+			//TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
 
+			/*
 			if(!ShadowContext::isCleanValue(addrShadow))
 			{
 				logUninitializedAddress(addrSpace, address);
 			}
+			*/
 			break;
 		}
 
     	case llvm::Instruction::FAdd:
 		{
-			SimpleOr(workItem, instruction);
+			//SimpleOr(workItem, instruction);
 			break;
 		}
 		case llvm::Instruction::FCmp:
 		{
-			SimpleOr(workItem, instruction);
+			//SimpleOr(workItem, instruction);
 			break;
 		}
 		case llvm::Instruction::FDiv:
 		{
-			SimpleOr(workItem, instruction);
+			//SimpleOr(workItem, instruction);
 			break;
 		}
 		case llvm::Instruction::FMul:
 		{
-			SimpleOr(workItem, instruction);
+			//SimpleOr(workItem, instruction);
 			break;
 		}
 		case llvm::Instruction::FSub:
 		{
-			SimpleOr(workItem, instruction);
+			//SimpleOr(workItem, instruction);
 			break;
 		}
 
@@ -1008,12 +1016,14 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 			shadowValues->setValue(instruction, v);
 
 			// Check shadow of address
-			TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
+			//TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
 
+			/*
 			if(!ShadowContext::isCleanValue(addrShadow))
 			{
 				logUninitializedAddress(addrSpace, address, false);
 			}
+			*/
 
 //            if (I.isAtomic())
 //                I.setOrdering(addAcquireOrdering(I.getOrdering()));
