@@ -966,7 +966,6 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 			if(Val->getType()->isFloatTy()){
 
-
 				if(const llvm::ConstantFP *fp = llvm::dyn_cast<const llvm::ConstantFP>(Val)){
 					//Val is a constant
 
@@ -976,11 +975,13 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 					TypedValue shadowVal = ShadowContext::getValueFromFloat(floatVal);
 					storeShadowMemory(addrSpace, address, shadowVal, workItem);
+					shadowValues->setValue(Addr, shadowVal);
 
 				}else{
 					cout << "not a float constan" << endl;
 					TypedValue shadowVal = shadowContext.getValue(workItem, Val);
 					storeShadowMemory(addrSpace, address, shadowVal, workItem);
+					shadowValues->setValue(Addr, shadowVal);
 				}
 
 
@@ -1021,11 +1022,14 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 			TypedValue lhsVal = shadowValues->getValue(lhs);
 			TypedValue rhsVal = shadowValues->getValue(rhs);
 
-			//TODO: this should add the values
-			shadowValues->setValue(instruction, lhsVal);
+			//cout << lhsVal.getFloat(0) << endl;
+			//cout << rhsVal.getFloat(0) << endl;
 
 			float res = lhsVal.getFloat(0) + rhsVal.getFloat(0);
 			cout << "res : " << res << endl;
+
+			TypedValue shadowVal = ShadowContext::getValueFromFloat(res);
+			shadowValues->setValue(instruction, shadowVal);
 
 
 			/*
@@ -1067,15 +1071,24 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 		case llvm::Instruction::Load:
 		{
+			if(!instruction->getType()->isFloatTy()){
+				cout << "not float type" << endl;
+				break;
+			}
+
 			assert(instruction->getType()->isSized() && "Load type must have size");
 			const llvm::LoadInst *loadInst = ((const llvm::LoadInst*)instruction);
 			const llvm::Value *Addr = loadInst->getPointerOperand();
 
-			size_t address = workItem->getOperand(Addr).getPointer();
-			unsigned addrSpace = loadInst->getPointerAddressSpace();
+			//size_t address = workItem->getOperand(Addr).getPointer();
+			//unsigned addrSpace = loadInst->getPointerAddressSpace();
 
 			TypedValue v = shadowContext.getMemoryPool()->clone(result);
-			loadShadowMemory(addrSpace, address, v, workItem);
+			cout << "load : " << v.getFloat() << endl;
+
+			// I dont know why it was loading originally - Ask Moritz
+			//loadShadowMemory(addrSpace, address, v, workItem);
+
 			shadowValues->setValue(instruction, v);
 
 			// Check shadow of address
@@ -2344,6 +2357,7 @@ void ShadowMemory::load(unsigned char *dst, size_t address, size_t size) const
     }
     else
     {
+    	cout << "poisoned load" << endl;
         TypedValue v = ShadowContext::getPoisonedValue(size);
         memcpy(dst, v.data, size);
     }
