@@ -22,6 +22,10 @@
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Type.h"
 
+#include "llvm/ADT/APFloat.h"
+#include "llvm/IR/Type.h"
+#include "llvm/Support/Casting.h"
+
 #include "FloatTest.h"
 #include <mutex>
 
@@ -59,6 +63,7 @@ void FloatTest::allocAndStoreShadowMemory(unsigned addrSpace, size_t address, Ty
 {
     if(addrSpace == AddrSpaceConstant)
     {
+    	cout << "got constant" << endl;
         //TODO: Eventually store value
         return;
     }
@@ -925,10 +930,10 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
     instruction->dump();
 #endif
 
+    instruction->dump();
+
     ShadowWorkItem *shadowWorkItem = shadowContext.getShadowWorkItem(workItem);
     ShadowValues *shadowValues = shadowWorkItem->getValues();
-
-    cerr << "got instruction" << endl;
 
     switch(instruction->getOpcode())
     {
@@ -937,6 +942,8 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
     	case llvm::Instruction::Alloca:
 		{
 			const llvm::AllocaInst *allocaInst = ((const llvm::AllocaInst*)instruction);
+
+			if(!allocaInst->getType()->isFloatTy()) break;
 
 			size_t address = result.getPointer();
 
@@ -957,12 +964,35 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 			size_t address = workItem->getOperand(Addr).getPointer();
 			unsigned addrSpace = storeInst->getPointerAddressSpace();
 
+			if(Val->getType()->isFloatTy()){
+
+
+				if(const llvm::ConstantFP *fp = llvm::dyn_cast<const llvm::ConstantFP>(Val)){
+					//Val is a constant
+
+					const llvm::APFloat ap = fp->getValueAPF();
+					float floatVal = fp->getValueAPF().convertToFloat();
+					cout << floatVal << endl;
+
+					TypedValue shadowVal = ShadowContext::getValueFromFloat(floatVal);
+					storeShadowMemory(addrSpace, address, shadowVal, workItem);
+
+				}else{
+					cout << "not a float constan" << endl;
+					TypedValue shadowVal = shadowContext.getValue(workItem, Val);
+					storeShadowMemory(addrSpace, address, shadowVal, workItem);
+				}
+
+
+			}
+
+
 			//TypedValue shadowVal = storeInst->isAtomic() ? ShadowContext::getCleanValue(Val) :
 			//											   shadowContext.getValue(workItem, Val);
 
-			TypedValue shadowVal = shadowContext.getValue(workItem, Val);
+			//TypedValue shadowVal = shadowContext.getValue(workItem, Val);
 
-			storeShadowMemory(addrSpace, address, shadowVal, workItem);
+			//storeShadowMemory(addrSpace, address, shadowVal, workItem);
 
 			// Check shadow of address
 			//TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
@@ -978,7 +1008,40 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
     	case llvm::Instruction::FAdd:
 		{
+
+			cout << "got FAdd" << endl;
 			//SimpleOr(workItem, instruction);
+
+			llvm::Value* lhs = instruction->getOperand(0);
+			llvm::Value* rhs = instruction->getOperand(1);
+
+			PARANOID_CHECK(workItem, instruction);
+			ShadowValues *shadowValues = shadowContext.getShadowWorkItem(workItem)->getValues();
+
+			TypedValue lhsVal = shadowValues->getValue(lhs);
+			TypedValue rhsVal = shadowValues->getValue(rhs);
+
+			//TODO: this should add the values
+			shadowValues->setValue(instruction, lhsVal);
+
+			float res = lhsVal.getFloat(0) + rhsVal.getFloat(0);
+			cout << "res : " << res << endl;
+
+
+			/*
+			    ShadowValues *shadowValues = shadowContext.getShadowWorkItem(workItem)->getValues();
+
+			    for(llvm::Instruction::const_op_iterator OI = instruction->op_begin(); OI != instruction->op_end(); ++OI)
+			    {
+			        if(!ShadowContext::isCleanValue(shadowContext.getValue(workItem, OI->get())))
+			        {
+			            shadowValues->setValue(instruction, ShadowContext::getPoisonedValue(instruction));
+			            return;
+			        }
+			    }
+
+			    shadowValues->setValue(instruction, ShadowContext::getCleanValue(instruction));
+*/
 			break;
 		}
 		case llvm::Instruction::FCmp:
@@ -1906,6 +1969,7 @@ void FloatTest::storeShadowMemory(unsigned addrSpace, size_t address, TypedValue
 
     if(addrSpace == AddrSpaceConstant)
     {
+    	cout << "got constant" << endl;
         //TODO: Eventually store value
         return;
     }
@@ -2505,6 +2569,19 @@ TypedValue ShadowContext::getUninitializedValue(const llvm::Value *V)
     //memset(v.data, 0, v.size*v.num);
 
     return v;
+}
+
+TypedValue ShadowContext::getValueFromFloat(float f){
+
+	TypedValue v = {
+		sizeof(float),
+		1,
+		m_workSpace.memoryPool->alloc(sizeof(float))
+	};
+
+	*((float*)(v.data)) = f;
+
+	return v;
 }
 
 

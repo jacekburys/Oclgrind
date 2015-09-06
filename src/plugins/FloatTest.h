@@ -201,6 +201,7 @@ namespace oclgrind
             //for float test
             static TypedValue getUninitializedValue(const llvm::Value *V);
             static TypedValue getUninitializedValue(const llvm::Type *Ty);
+            static TypedValue getValueFromFloat(float f);
 
             static TypedValue getCleanValue(unsigned size);
             static TypedValue getCleanValue(TypedValue v);
