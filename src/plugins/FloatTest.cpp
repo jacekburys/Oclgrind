@@ -73,10 +73,12 @@ void FloatTest::allocAndStoreShadowMemory(unsigned addrSpace, size_t address, Ty
     storeShadowMemory(addrSpace, address, SM, workItem, workGroup, unchecked);
 }
 
+// TODO : this won't be used
 bool FloatTest::checkAllOperandsDefined(const WorkItem *workItem, const llvm::Instruction *I)
 {
     for(llvm::Instruction::const_op_iterator OI = I->op_begin(); OI != I->op_end(); ++OI)
     {
+    	/*
         if(!ShadowContext::isCleanValue(shadowContext.getValue(workItem, OI->get())))
         {
 #ifdef DUMP_SHADOW
@@ -89,6 +91,7 @@ bool FloatTest::checkAllOperandsDefined(const WorkItem *workItem, const llvm::In
 #endif
             return false;
         }
+        */
     }
 
     return true;
@@ -125,10 +128,12 @@ void FloatTest::checkStructMemcpy(const WorkItem *workItem, const llvm::Value *s
             FATAL_ERROR("Unsupported addressspace %d", srcAddrSpace);
     }
 
+    /*
     if(!ShadowContext::isCleanStruct(shadowMemory, srcAddr, structTy))
     {
         logUninitializedWrite(srcAddrSpace, srcAddr);
     }
+    */
 }
 
 void FloatTest::copyShadowMemory(unsigned dstAddrSpace, size_t dst, unsigned srcAddrSpace, size_t src, unsigned size, const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
@@ -207,6 +212,9 @@ ShadowMemory* FloatTest::getShadowMemory(unsigned addrSpace,
     }
 }
 
+
+// THIS IS NOT USED ANYWHERE, COMMENTED OUT FOR NOW
+/*
 bool FloatTest::handleBuiltinFunction(const WorkItem *workItem, string name,
                                                   const llvm::CallInst *CI, const TypedValue result)
 {
@@ -748,11 +756,13 @@ bool FloatTest::handleBuiltinFunction(const WorkItem *workItem, string name,
         TypedValue baseShadow = shadowContext.getValue(workItem, BaseOp);
         TypedValue offsetShadow = shadowContext.getValue(workItem, OffsetOp);
 
+
         if(!ShadowContext::isCleanValue(baseShadow) ||
            !ShadowContext::isCleanValue(offsetShadow))
         {
             logUninitializedAddress(addressSpace, address);
         }
+
         return true;
     }
     else if(name.compare(0, 5, "vload") == 0)
@@ -774,11 +784,13 @@ bool FloatTest::handleBuiltinFunction(const WorkItem *workItem, string name,
         TypedValue baseShadow = shadowContext.getValue(workItem, BaseOp);
         TypedValue offsetShadow = shadowContext.getValue(workItem, OffsetOp);
 
+
         if(!ShadowContext::isCleanValue(baseShadow) ||
            !ShadowContext::isCleanValue(offsetShadow))
         {
             logUninitializedAddress(addressSpace, address, false);
         }
+
 
         return true;
     }
@@ -808,17 +820,20 @@ bool FloatTest::handleBuiltinFunction(const WorkItem *workItem, string name,
         TypedValue baseShadow = shadowContext.getValue(workItem, BaseOp);
         TypedValue offsetShadow = shadowContext.getValue(workItem, OffsetOp);
 
+
         if(!ShadowContext::isCleanValue(baseShadow) ||
            !ShadowContext::isCleanValue(offsetShadow))
         {
             logUninitializedAddress(addressSpace, address);
         }
 
+
         return true;
     }
 
     return false;
 }
+*/
 
 void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm::IntrinsicInst *I)
 {
@@ -826,7 +841,8 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
     {
         case llvm::Intrinsic::fmuladd:
         {
-            SimpleOr(workItem, I);
+        	// TODO : handle fmuladd
+            //SimpleOr(workItem, I);
             break;
         }
         case llvm::Intrinsic::memcpy:
@@ -851,18 +867,22 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
             // Check shadow of src address
             TypedValue srcShadow = shadowContext.getValue(workItem, srcOp);
 
+            /*
             if(!ShadowContext::isCleanValue(srcShadow))
             {
                 logUninitializedAddress(srcAddrSpace, src, false);
             }
+            */
 
             // Check shadow of dst address
             TypedValue dstShadow = shadowContext.getValue(workItem, dstOp);
 
+            /*
             if(!ShadowContext::isCleanValue(dstShadow))
             {
                 logUninitializedAddress(dstAddrSpace, dst);
             }
+            */
             break;
         }
         case llvm::Intrinsic::memset:
@@ -887,10 +907,12 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
             // Check shadow of address
             TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
 
+            /*
             if(!ShadowContext::isCleanValue(addrShadow))
             {
                 logUninitializedAddress(addrSpace, dst);
             }
+            */
             break;
         }
         case llvm::Intrinsic::dbg_declare:
@@ -916,8 +938,10 @@ void FloatTest::hostMemoryStore(const Memory *memory,
 {
     if(memory->getAddressSpace() == AddrSpaceGlobal)
     {
-        TypedValue v = ShadowContext::getCleanValue(size);
-        allocAndStoreShadowMemory(AddrSpaceGlobal, address, v);
+    	//TODO : handle floats here
+
+        //TypedValue v = ShadowContext::getCleanValue(size);
+        //allocAndStoreShadowMemory(AddrSpaceGlobal, address, v);
     }
 }
 
@@ -987,23 +1011,6 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 			}
 
-
-			//TypedValue shadowVal = storeInst->isAtomic() ? ShadowContext::getCleanValue(Val) :
-			//											   shadowContext.getValue(workItem, Val);
-
-			//TypedValue shadowVal = shadowContext.getValue(workItem, Val);
-
-			//storeShadowMemory(addrSpace, address, shadowVal, workItem);
-
-			// Check shadow of address
-			//TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
-
-			/*
-			if(!ShadowContext::isCleanValue(addrShadow))
-			{
-				logUninitializedAddress(addrSpace, address);
-			}
-			*/
 			break;
 		}
 
@@ -1031,21 +1038,6 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 			TypedValue shadowVal = ShadowContext::getValueFromFloat(res);
 			shadowValues->setValue(instruction, shadowVal);
 
-
-			/*
-			    ShadowValues *shadowValues = shadowContext.getShadowWorkItem(workItem)->getValues();
-
-			    for(llvm::Instruction::const_op_iterator OI = instruction->op_begin(); OI != instruction->op_end(); ++OI)
-			    {
-			        if(!ShadowContext::isCleanValue(shadowContext.getValue(workItem, OI->get())))
-			        {
-			            shadowValues->setValue(instruction, ShadowContext::getPoisonedValue(instruction));
-			            return;
-			        }
-			    }
-
-			    shadowValues->setValue(instruction, ShadowContext::getCleanValue(instruction));
-*/
 			break;
 		}
 		case llvm::Instruction::FCmp:
@@ -1742,11 +1734,11 @@ void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
                     // Constants
                     // value->second.data == ptr
                     // value->second.size == ptr size
-                    TypedValue cleanValue = m_pool.clone(ShadowContext::getCleanValue(value->first));
-                    shadowContext.setGlobalValue(value->first, cleanValue);
+                    TypedValue uninitializedValue = m_pool.clone(ShadowContext::getUninitializedValue(value->first));
+                    shadowContext.setGlobalValue(value->first, uninitializedValue);
                     const llvm::Type *elementTy = type->getPointerElementType();
                     allocAndStoreShadowMemory(AddrSpaceConstant, value->second.getPointer(),
-                                              ShadowContext::getCleanValue(elementTy));
+                                              ShadowContext::getUninitializedValue(elementTy));
                     break;
                 }
                 case AddrSpaceGlobal:
@@ -1762,7 +1754,7 @@ void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
                         // Allocate poisoned global memory if there was no host store
                         size_t size = m_context->getGlobalMemory()->getBuffer(address)->size;
                         allocAndStoreShadowMemory(AddrSpaceGlobal, address,
-                                                  ShadowContext::getPoisonedValue(size), NULL, NULL, true);
+                                                  ShadowContext::getUninitializedValue(size), NULL, NULL, true);
                     }
 
                     m_deferredInit.push_back(*value);
@@ -1781,8 +1773,8 @@ void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
                     else
                     {
                         // Variables have a global pointer
-                        TypedValue cleanValue = m_pool.clone(ShadowContext::getCleanValue(value->first));
-                        shadowContext.setGlobalValue(value->first, cleanValue);
+                        TypedValue uninitializedValue = m_pool.clone(ShadowContext::getUninitializedValue(value->first));
+                        shadowContext.setGlobalValue(value->first, uninitializedValue);
                     }
 
                     m_deferredInitGroup.push_back(*value);
@@ -1805,9 +1797,9 @@ void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
                         // value->second.data == val
                         // value->second.size == val size
                         m_deferredInit.push_back(*value);
-                        TypedValue cleanValue = m_pool.clone(ShadowContext::getCleanValue(value->first));
+                        TypedValue uninitializedValue = m_pool.clone(ShadowContext::getUninitializedValue(value->first));
                         //TODO: Structs can have posioned padding bytes. Is this important?
-                        shadowContext.setGlobalValue(value->first, cleanValue);
+                        shadowContext.setGlobalValue(value->first, uninitializedValue);
                     }
                     break;
                 }
@@ -1896,10 +1888,11 @@ void FloatTest::memoryMap(const Memory *memory, size_t address,
     if(!(flags & CL_MAP_READ))
     {
         allocAndStoreShadowMemory(memory->getAddressSpace(), address + offset,
-                ShadowContext::getCleanValue(size));
+                ShadowContext::getUninitializedValue(size));
     }
 }
 
+/*
 void FloatTest::SimpleOr(const WorkItem *workItem, const llvm::Instruction *I)
 {
     PARANOID_CHECK(workItem, I);
@@ -1916,6 +1909,7 @@ void FloatTest::SimpleOr(const WorkItem *workItem, const llvm::Instruction *I)
 
     shadowValues->setValue(I, ShadowContext::getCleanValue(I));
 }
+*/
 
 void FloatTest::SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *CI)
 {
@@ -1938,6 +1932,7 @@ void FloatTest::SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *C
 
     loadShadowMemory(addrSpace, address, oldShadow, workItem);
 
+    /*
     if(!ShadowContext::isCleanValue(argShadow) || !ShadowContext::isCleanValue(oldShadow))
     {
         newShadow = ShadowContext::getPoisonedValue(4);
@@ -1946,6 +1941,7 @@ void FloatTest::SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *C
     {
         newShadow = ShadowContext::getCleanValue(4);
     }
+    */
 
     storeShadowMemory(addrSpace, address, newShadow, workItem);
 
@@ -1960,10 +1956,12 @@ void FloatTest::SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *C
     // Check shadow of address
     TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
 
+    /*
     if(!ShadowContext::isCleanValue(addrShadow))
     {
         logUninitializedAddress(addrSpace, address);
     }
+    */
 }
 
 void FloatTest::storeShadowMemory(unsigned addrSpace, size_t address, TypedValue SM, const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
@@ -1972,6 +1970,7 @@ void FloatTest::storeShadowMemory(unsigned addrSpace, size_t address, TypedValue
     cout << "Store " << hex << SM << " to space " << dec << addrSpace << " at address " << hex << address << endl;
 #endif
 
+    /*
     if(!unchecked && addrSpace != AddrSpacePrivate && !ShadowContext::isCleanValue(SM))
     {
 #ifdef DUMP_SHADOW
@@ -1979,6 +1978,7 @@ void FloatTest::storeShadowMemory(unsigned addrSpace, size_t address, TypedValue
 #endif
         logUninitializedWrite(addrSpace, address);
     }
+    */
 
     if(addrSpace == AddrSpaceConstant)
     {
@@ -1991,6 +1991,7 @@ void FloatTest::storeShadowMemory(unsigned addrSpace, size_t address, TypedValue
     memory->store(SM.data, address, SM.size*SM.num);
 }
 
+// TODO : store floats
 void FloatTest::workItemBegin(const WorkItem *workItem)
 {
     shadowContext.createMemoryPool();
@@ -2011,7 +2012,7 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
                     // Global pointer kernel arguments
                     // value.second.data == ptr
                     // value.second.size == ptr size
-                    shadowValues->setValue(value.first, ShadowContext::getCleanValue(type));
+                    shadowValues->setValue(value.first, ShadowContext::getUninitializedValue(type));
                     break;
                 }
                 case AddrSpaceLocal:
@@ -2019,7 +2020,7 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
                     // Local pointer kernel arguments
                     // value.second.data == NULL
                     // value.second.size == val size
-                    shadowValues->setValue(value.first, ShadowContext::getCleanValue(value.first));
+                    shadowValues->setValue(value.first, ShadowContext::getUninitializedValue(value.first));
                     break;
                 }
                 case AddrSpacePrivate:
@@ -2032,9 +2033,9 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
                         // value.second.data == val
                         // value.second.size == val size
                         size_t address = workItem->getOperand(value.first).getPointer();
-                        TypedValue cleanValue = ShadowContext::getCleanValue(value.second.size);
-                        allocAndStoreShadowMemory(AddrSpacePrivate, address, cleanValue, workItem);
-                        shadowValues->setValue(value.first, ShadowContext::getCleanValue(value.first));
+                        TypedValue uninitializedValue = ShadowContext::getUninitializedValue(value.second.size);
+                        allocAndStoreShadowMemory(AddrSpacePrivate, address, uninitializedValue, workItem);
+                        shadowValues->setValue(value.first, ShadowContext::getUninitializedValue(value.first));
                     }
                     else
                     {
@@ -2042,7 +2043,7 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
                         // value.second.data == NULL
                         // value.second.size == val size
                         size_t address = workItem->getOperand(value.first).getPointer();
-                        TypedValue cleanValue = ShadowContext::getCleanValue(value.second.size);
+                        TypedValue cleanValue = ShadowContext::getUninitializedValue(value.second.size);
                         allocAndStoreShadowMemory(AddrSpacePrivate, address, cleanValue, workItem);
                     }
                     break;
@@ -2054,7 +2055,7 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
             // Non pointer type kernel arguments
             // value->second.data == val
             // value->second.size == val size
-            shadowValues->setValue(value.first, ShadowContext::getCleanValue(value.first));
+            shadowValues->setValue(value.first, ShadowContext::getUninitializedValue(value.first));
         }
     }
 }
@@ -2084,11 +2085,15 @@ void FloatTest::workGroupBegin(const WorkGroup *workGroup)
         {
             //TODO: Local memory clean or poisoned? May need to differentiate
             //      between kernel argument (?) and variable (poisoned)
-            v = ShadowContext::getPoisonedValue(value.second.size);
+            //v = ShadowContext::getPoisonedValue(value.second.size);
+            v = ShadowContext::getUninitializedValue(value.second.size);
+
         }
         else
         {
-            v = ShadowContext::getPoisonedValue(value.second.size);
+            //v = ShadowContext::getPoisonedValue(value.second.size);
+            v = ShadowContext::getUninitializedValue(value.second.size);
+
         }
 
         allocAndStoreShadowMemory(AddrSpaceLocal, address, v, NULL, workGroup, true);
@@ -2151,7 +2156,8 @@ TypedValue ShadowFrame::getValue(const llvm::Value *V) const
         return m_values->at(V);
     }
     else if (llvm::isa<llvm::UndefValue>(V)) {
-        return ShadowContext::getPoisonedValue(V);
+    	// TODO : don't know if this case is handled correctly
+        return ShadowContext::getUninitializedValue(V);
     }
     else if (llvm::isa<llvm::Argument>(V)) {
         // For arguments the shadow is already stored in the map.
@@ -2160,7 +2166,7 @@ TypedValue ShadowFrame::getValue(const llvm::Value *V) const
     }
     else if(const llvm::ConstantVector *VC = llvm::dyn_cast<llvm::ConstantVector>(V))
     {
-        TypedValue vecShadow = ShadowContext::getCleanValue(V);
+        TypedValue vecShadow = ShadowContext::getUninitializedValue(V);
         TypedValue elemShadow;
 
         for(unsigned i = 0; i < vecShadow.num; ++i)
@@ -2175,7 +2181,7 @@ TypedValue ShadowFrame::getValue(const llvm::Value *V) const
     else
     {
         // For everything else the shadow is zero.
-        return ShadowContext::getCleanValue(V);
+        //return ShadowContext::getCleanValue(V);
     }
 }
 
@@ -2358,8 +2364,8 @@ void ShadowMemory::load(unsigned char *dst, size_t address, size_t size) const
     else
     {
     	cout << "poisoned load" << endl;
-        TypedValue v = ShadowContext::getPoisonedValue(size);
-        memcpy(dst, v.data, size);
+        //TypedValue v = ShadowContext::getPoisonedValue(size);
+       // memcpy(dst, v.data, size);
     }
 }
 
@@ -2530,6 +2536,7 @@ void ShadowContext::freeWorkGroups()
     }
 }
 
+/*
 TypedValue ShadowContext::getCleanValue(unsigned size)
 {
     TypedValue v = {
@@ -2569,6 +2576,7 @@ TypedValue ShadowContext::getCleanValue(const llvm::Value *V)
 
     return v;
 }
+*/
 
 //for float_test
 TypedValue ShadowContext::getUninitializedValue(const llvm::Value *V)
@@ -2598,7 +2606,7 @@ TypedValue ShadowContext::getValueFromFloat(float f){
 	return v;
 }
 
-
+/*
 TypedValue ShadowContext::getCleanValue(const llvm::Type *Ty)
 {
     unsigned size = getTypeSize(Ty);
@@ -2612,6 +2620,7 @@ TypedValue ShadowContext::getCleanValue(const llvm::Type *Ty)
 
     return v;
 }
+*/
 
 // for float_test
 TypedValue ShadowContext::getUninitializedValue(const llvm::Type *Ty)
@@ -2628,6 +2637,20 @@ TypedValue ShadowContext::getUninitializedValue(const llvm::Type *Ty)
     return v;
 }
 
+TypedValue ShadowContext::getUninitializedValue(unsigned size)
+{
+    TypedValue v = {
+        size,
+        1,
+        m_workSpace.memoryPool->alloc(size)
+    };
+
+    //memset(v.data, -1, size);
+
+    return v;
+}
+
+/*
 TypedValue ShadowContext::getPoisonedValue(unsigned size)
 {
     TypedValue v = {
@@ -2681,6 +2704,7 @@ TypedValue ShadowContext::getPoisonedValue(const llvm::Type *Ty)
 
     return v;
 }
+*/
 
 TypedValue ShadowContext::getValue(const WorkItem *workItem, const llvm::Value *V) const
 {
@@ -2695,6 +2719,7 @@ TypedValue ShadowContext::getValue(const WorkItem *workItem, const llvm::Value *
     }
 }
 
+/*
 bool ShadowContext::isCleanStruct(ShadowMemory *shadowMemory, size_t address, const llvm::StructType *structTy)
 {
     if(structTy->isPacked())
@@ -2755,7 +2780,7 @@ bool ShadowContext::isCleanValue(TypedValue v, unsigned offset)
     TypedValue c = ShadowContext::getCleanValue(v.size);
     return !memcmp(v.data + offset*v.size, c.data, v.size);
 }
-
+*/
 void ShadowContext::setGlobalValue(const llvm::Value *V, TypedValue SV)
 {
     assert(!m_globalValues.count(V) && "Values may only have one shadow");

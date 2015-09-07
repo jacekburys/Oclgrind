@@ -201,12 +201,15 @@ namespace oclgrind
             //for float test
             static TypedValue getUninitializedValue(const llvm::Value *V);
             static TypedValue getUninitializedValue(const llvm::Type *Ty);
+            static TypedValue getUninitializedValue(unsigned size);
             static TypedValue getValueFromFloat(float f);
 
+            /*
             static TypedValue getCleanValue(unsigned size);
             static TypedValue getCleanValue(TypedValue v);
             static TypedValue getCleanValue(const llvm::Type *Ty);
             static TypedValue getCleanValue(const llvm::Value *V);
+            */
             inline ShadowMemory* getGlobalMemory() const
             {
                 return m_globalMemory;
@@ -216,10 +219,12 @@ namespace oclgrind
             {
                 return m_workSpace.memoryPool;
             }
+            /*
             static TypedValue getPoisonedValue(unsigned size);
             static TypedValue getPoisonedValue(TypedValue v);
             static TypedValue getPoisonedValue(const llvm::Type *Ty);
             static TypedValue getPoisonedValue(const llvm::Value *V);
+            */
             inline ShadowWorkItem* getShadowWorkItem(const WorkItem *workItem) const
             {
                 return m_workSpace.workItems->at(workItem);
@@ -233,9 +238,11 @@ namespace oclgrind
             {
                 return llvm::isa<llvm::Constant>(V) || m_globalValues.count(V) || m_workSpace.workItems->at(workItem)->getValues()->hasValue(V);
             }
+            /*
             static bool isCleanStruct(ShadowMemory *shadowMemory, size_t address, const llvm::StructType *structTy);
             static bool isCleanValue(TypedValue v);
             static bool isCleanValue(TypedValue v, unsigned offset);
+            */
             void setGlobalValue(const llvm::Value *V, TypedValue SV);
 
         private:
@@ -303,7 +310,7 @@ namespace oclgrind
             void logUninitializedCF() const;
             void logUninitializedIndex() const;
             void logUninitializedWrite(unsigned int addrSpace, size_t address) const;
-            void SimpleOr(const WorkItem *workItem, const llvm::Instruction *I);
+            //void SimpleOr(const WorkItem *workItem, const llvm::Instruction *I);
             void SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *CI);
             void storeShadowMemory(unsigned addrSpace, size_t address, TypedValue SM,
                                    const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL, bool unchecked = false);
