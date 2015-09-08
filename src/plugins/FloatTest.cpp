@@ -1209,7 +1209,35 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         }
         case llvm::Instruction::FPToSI:
         {
+        	// convert to int and check if agrees with the result
+        	const llvm::CastInst* castInst = ((const llvm::CastInst*) instruction);
 
+        	if(!castInst->getSrcTy()->isFloatTy()) break;
+
+        	llvm::Value *arg   = castInst->getOperand(0);
+        	TypedValue shadowValue = shadowValues->getValue(arg);
+
+        	int64_t actual = result.getSInt(0);
+        	int64_t shadow = 0;
+
+        	switch(castInst->getDestTy()->getIntegerBitWidth()){
+        	case 8:
+        		shadow = (int8_t)shadowValue.getFloat(0);
+        		break;
+        	case 16:
+				shadow = (int16_t)shadowValue.getFloat(0);
+        		break;
+        	case 32:
+				shadow = (int32_t)shadowValue.getFloat(0);
+        		break;
+        	case 64:
+				shadow = (int64_t)shadowValue.getFloat(0);
+        		break;
+        	default:
+        		assert(false && "unsupported size");
+        		break;
+        	}
+        	assert(actual == shadow && "wrong cast");
             break;
         }
         case llvm::Instruction::FPToUI:
