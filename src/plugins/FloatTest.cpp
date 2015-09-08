@@ -1294,7 +1294,13 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         }
         case llvm::Instruction::UIToFP:
         {
+        	//take the result of cast and store value
+			const llvm::UIToFPInst* castInst = ((const llvm::UIToFPInst*) instruction);
+			if(!castInst->getDestTy()->isFloatTy()) break;
+			cout << "got cast to float" << endl;
 
+			TypedValue v = shadowContext.getMemoryPool()->clone(result);
+			shadowValues->setValue(instruction, v);
             break;
         }
 
