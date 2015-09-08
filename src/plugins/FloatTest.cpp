@@ -1216,7 +1216,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         }
         case llvm::Instruction::FPToSI:
         {
-        	// convert to int and check if agrees with the result
+        	// convert to signed int and check if agrees with the result
         	const llvm::CastInst* castInst = ((const llvm::CastInst*) instruction);
 
         	if(!castInst->getSrcTy()->isFloatTy()) break;
@@ -1250,7 +1250,36 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         }
         case llvm::Instruction::FPToUI:
         {
+        	// convert to unsigned int and check if agrees with the result
+			const llvm::CastInst* castInst = ((const llvm::CastInst*) instruction);
 
+			if(!castInst->getSrcTy()->isFloatTy()) break;
+
+			llvm::Value *arg   = castInst->getOperand(0);
+			TypedValue shadowValue = shadowValues->getValue(arg);
+
+			uint64_t actual = result.getUInt(0);
+			uint64_t shadow = 0;
+
+			switch(castInst->getDestTy()->getIntegerBitWidth()){
+			case 8:
+				shadow = (uint8_t)shadowValue.getFloat(0);
+				break;
+			case 16:
+				shadow = (uint16_t)shadowValue.getFloat(0);
+				break;
+			case 32:
+				shadow = (uint32_t)shadowValue.getFloat(0);
+				break;
+			case 64:
+				shadow = (uint64_t)shadowValue.getFloat(0);
+				break;
+			default:
+				assert(false && "unsupported size");
+				break;
+			}
+			assert(actual == shadow && "wrong cast");
+			cout << "cast ok" << endl;
             break;
         }
         case llvm::Instruction::FPTrunc:
