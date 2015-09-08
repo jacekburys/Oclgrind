@@ -1122,8 +1122,8 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 					shadowValues->setValue(Addr, shadowVal);
 
 				}else{
-					cout << "not a float constan" << endl;
 					TypedValue shadowVal = shadowContext.getValue(workItem, Val);
+					cout << "not a float constant : " << shadowVal.getFloat(0) << endl;
 					storeShadowMemory(addrSpace, address, shadowVal, workItem);
 					shadowValues->setValue(Addr, shadowVal);
 				}
@@ -1142,7 +1142,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 			assert(instruction->getType()->isSized() && "Load type must have size");
 			const llvm::LoadInst *loadInst = ((const llvm::LoadInst*)instruction);
-			const llvm::Value *Addr = loadInst->getPointerOperand();
+			//const llvm::Value *Addr = loadInst->getPointerOperand();
 
 			//size_t address = workItem->getOperand(Addr).getPointer();
 			//unsigned addrSpace = loadInst->getPointerAddressSpace();
@@ -1196,7 +1196,42 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 			break;
 		}
 
+		// CASTS
+        case llvm::Instruction::SIToFP:
+        {
 
+            break;
+        }
+        case llvm::Instruction::FPExt:
+        {
+
+            break;
+        }
+        case llvm::Instruction::FPToSI:
+        {
+
+            break;
+        }
+        case llvm::Instruction::FPToUI:
+        {
+
+            break;
+        }
+        case llvm::Instruction::FPTrunc:
+        {
+
+            break;
+        }
+        case llvm::Instruction::FRem:
+        {
+
+            break;
+        }
+        case llvm::Instruction::UIToFP:
+        {
+
+            break;
+        }
 
 		/////////////////////////
 
@@ -1408,31 +1443,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             break;
         }
 
-        case llvm::Instruction::FPExt:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
-        case llvm::Instruction::FPToSI:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
-        case llvm::Instruction::FPToUI:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
-        case llvm::Instruction::FPTrunc:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
-        case llvm::Instruction::FRem:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
+
 
         case llvm::Instruction::GetElementPtr:
         {
@@ -1729,11 +1740,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             shadowValues->setValue(instruction, newShadow);
             break;
         }
-        case llvm::Instruction::SIToFP:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
+
         case llvm::Instruction::SRem:
         {
             SimpleOr(workItem, instruction);
@@ -1772,11 +1779,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             SimpleOr(workItem, instruction);
             break;
         }
-        case llvm::Instruction::UIToFP:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
+
         case llvm::Instruction::URem:
         {
             SimpleOr(workItem, instruction);
@@ -1804,6 +1807,9 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         }
         */
         default:
+        	if(instruction->getType()->isFloatTy()){
+        		cout << "unsuppoted float operation" << endl;
+        	}
         	//FATAL_ERROR("Unsupported instruction: %s", instruction->getOpcodeName());
         	break;
     }
