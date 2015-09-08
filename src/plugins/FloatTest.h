@@ -291,7 +291,7 @@ namespace oclgrind
 
             void allocAndStoreShadowMemory(unsigned addrSpace, size_t address, TypedValue SM,
                                            const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL, bool unchecked = false);
-            bool checkAllOperandsDefined(const WorkItem *workItem, const llvm::Instruction *I);
+            //bool checkAllOperandsDefined(const WorkItem *workItem, const llvm::Instruction *I);
             void checkStructMemcpy(const WorkItem *workItem, const llvm::Value *src);
             void copyShadowMemory(unsigned dstAddrSpace, size_t dst,
                                   unsigned srcAddrSpace, size_t src, unsigned size,
@@ -303,7 +303,7 @@ namespace oclgrind
             static std::string extractUnmangledName(const std::string fullname);
             ShadowMemory* getShadowMemory(unsigned addrSpace, const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL) const;
             bool handleBuiltinFunction(const WorkItem *workItem, std::string name, const llvm::CallInst *CI, const TypedValue result);
-            void handleIntrinsicInstruction(const WorkItem *workItem, const llvm::IntrinsicInst *I);
+            //void handleIntrinsicInstruction(const WorkItem *workItem, const llvm::IntrinsicInst *I);
             void loadShadowMemory(unsigned addrSpace, size_t address, TypedValue &SM,
                                   const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL);
             void logUninitializedAddress(unsigned int addrSpace, size_t address, bool write = true) const;
@@ -311,6 +311,8 @@ namespace oclgrind
             void logUninitializedIndex() const;
             void logUninitializedWrite(unsigned int addrSpace, size_t address) const;
             //void SimpleOr(const WorkItem *workItem, const llvm::Instruction *I);
+            void simpleFloatInstruction(const WorkItem *workItem, const llvm::Instruction *instruction);
+            void handleCmpInstruction(const WorkItem *workItem, const llvm::Instruction *instruction, const TypedValue& result);
             void SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *CI);
             void storeShadowMemory(unsigned addrSpace, size_t address, TypedValue SM,
                                    const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL, bool unchecked = false);

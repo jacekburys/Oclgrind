@@ -73,12 +73,13 @@ void FloatTest::allocAndStoreShadowMemory(unsigned addrSpace, size_t address, Ty
     storeShadowMemory(addrSpace, address, SM, workItem, workGroup, unchecked);
 }
 
-// TODO : this won't be used
+// this won't be used
+/*
 bool FloatTest::checkAllOperandsDefined(const WorkItem *workItem, const llvm::Instruction *I)
 {
     for(llvm::Instruction::const_op_iterator OI = I->op_begin(); OI != I->op_end(); ++OI)
     {
-    	/*
+
         if(!ShadowContext::isCleanValue(shadowContext.getValue(workItem, OI->get())))
         {
 #ifdef DUMP_SHADOW
@@ -91,11 +92,12 @@ bool FloatTest::checkAllOperandsDefined(const WorkItem *workItem, const llvm::In
 #endif
             return false;
         }
-        */
+
     }
 
     return true;
 }
+*/
 
 void FloatTest::checkStructMemcpy(const WorkItem *workItem, const llvm::Value *src)
 {
@@ -835,6 +837,8 @@ bool FloatTest::handleBuiltinFunction(const WorkItem *workItem, string name,
 }
 */
 
+// not used
+/*
 void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm::IntrinsicInst *I)
 {
     switch (I->getIntrinsicID())
@@ -867,22 +871,22 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
             // Check shadow of src address
             TypedValue srcShadow = shadowContext.getValue(workItem, srcOp);
 
-            /*
-            if(!ShadowContext::isCleanValue(srcShadow))
-            {
-                logUninitializedAddress(srcAddrSpace, src, false);
-            }
-            */
+
+            //if(!ShadowContext::isCleanValue(srcShadow))
+            //{
+            //    logUninitializedAddress(srcAddrSpace, src, false);
+            //}
+
 
             // Check shadow of dst address
             TypedValue dstShadow = shadowContext.getValue(workItem, dstOp);
 
-            /*
-            if(!ShadowContext::isCleanValue(dstShadow))
-            {
-                logUninitializedAddress(dstAddrSpace, dst);
-            }
-            */
+
+            //if(!ShadowContext::isCleanValue(dstShadow))
+            //{
+            //    logUninitializedAddress(dstAddrSpace, dst);
+            //}
+
             break;
         }
         case llvm::Intrinsic::memset:
@@ -907,12 +911,12 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
             // Check shadow of address
             TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
 
-            /*
-            if(!ShadowContext::isCleanValue(addrShadow))
-            {
-                logUninitializedAddress(addrSpace, dst);
-            }
-            */
+
+            //if(!ShadowContext::isCleanValue(addrShadow))
+            //{
+            //    logUninitializedAddress(addrSpace, dst);
+            //}
+
             break;
         }
         case llvm::Intrinsic::dbg_declare:
@@ -931,6 +935,7 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
             FATAL_ERROR("Unsupported intrinsic %s", llvm::Intrinsic::getName(I->getIntrinsicID()).c_str());
     }
 }
+*/
 
 void FloatTest::hostMemoryStore(const Memory *memory,
                              size_t address, size_t size,
@@ -944,6 +949,94 @@ void FloatTest::hostMemoryStore(const Memory *memory,
         //allocAndStoreShadowMemory(AddrSpaceGlobal, address, v);
     }
 }
+
+// handles FAdd, FSub, FMul, FDiv
+void FloatTest::simpleFloatInstruction(const WorkItem *workItem, const llvm::Instruction *instruction){
+
+	llvm::Value* lhs = instruction->getOperand(0);
+	llvm::Value* rhs = instruction->getOperand(1);
+
+	ShadowValues *shadowValues = shadowContext.getShadowWorkItem(workItem)->getValues();
+
+	TypedValue lhsVal = shadowValues->getValue(lhs);
+	TypedValue rhsVal = shadowValues->getValue(rhs);
+
+	float res;
+	switch(instruction->getOpcode()){
+	case llvm::Instruction::FAdd:
+		res = lhsVal.getFloat(0) + rhsVal.getFloat(0);
+		break;
+	case llvm::Instruction::Sub:
+		res = lhsVal.getFloat(0) - rhsVal.getFloat(0);
+		break;
+	case llvm::Instruction::FMul:
+		res = lhsVal.getFloat(0) * rhsVal.getFloat(0);
+		break;
+	case llvm::Instruction::FDiv:
+		res = lhsVal.getFloat(0) / rhsVal.getFloat(0);
+		break;
+	default:
+		assert(false && "unsupported instruction");
+		break;
+	}
+
+	cout << "result = " << res << endl;
+
+	TypedValue shadowVal = ShadowContext::getValueFromFloat(res);
+	shadowValues->setValue(instruction, shadowVal);
+
+}
+
+
+// Do I even need to handle this?
+// Check if the result agrees with the result from shadowMemory
+void FloatTest::handleCmpInstruction(const WorkItem *workItem, const llvm::Instruction *instruction, const TypedValue& result){
+
+	llvm::FCmpInst *cmpInst = ((llvm::FCmpInst*)instruction);
+	llvm::FCmpInst::Predicate *predicate = cmpInst->getOperand(0);
+	llvm::Value *lhs = cmpInst->getOperand(1);
+	llvm::Value *rhs = cmpInst->getOperand(2);
+
+	switch(predicate){
+	case llvm::FCmpInst::Predicate::FCMP_FALSE:///< 0 0 0 0    Always false (always folded)
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_OEQ:  ///< 0 0 0 1    True if ordered and equal
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_OGT:  ///< 0 0 1 0    True if ordered and greater than
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_OGE:  ///< 0 0 1 1    True if ordered and greater than or equal
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_OLT:  ///< 0 1 0 0    True if ordered and less than
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_OLE:  ///< 0 1 0 1    True if ordered and less than or equal
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_ONE:  ///< 0 1 1 0    True if ordered and operands are unequal
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_ORD:  ///< 0 1 1 1    True if ordered (no nans)
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_UNO:  ///< 1 0 0 0    True if unordered: isnan(X) | isnan(Y)
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_UEQ:  ///< 1 0 0 1    True if unordered or equal
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_UGT:  ///< 1 0 1 0    True if unordered or greater than
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_UGE:  ///< 1 0 1 1    True if unordered, greater than, or equal
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_ULT:  ///< 1 1 0 0    True if unordered or less than
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_ULE:  ///< 1 1 0 1    True if unordered, less than, or equal
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_UNE:  ///< 1 1 1 0    True if unordered or not equal
+		break;
+	case llvm::FCmpInst::Predicate::FCMP_TRUE: ///< 1 1 1 1    Always true (always folded)
+		break;
+	default:
+		assert(false && "unsupported predicate");
+		break;
+	}
+
+}
+
 
 void FloatTest::instructionExecuted(const WorkItem *workItem,
                                         const llvm::Instruction *instruction,
@@ -1013,54 +1106,6 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 			break;
 		}
-
-    	case llvm::Instruction::FAdd:
-		{
-
-			cout << "got FAdd" << endl;
-			//SimpleOr(workItem, instruction);
-
-			llvm::Value* lhs = instruction->getOperand(0);
-			llvm::Value* rhs = instruction->getOperand(1);
-
-			PARANOID_CHECK(workItem, instruction);
-			ShadowValues *shadowValues = shadowContext.getShadowWorkItem(workItem)->getValues();
-
-			TypedValue lhsVal = shadowValues->getValue(lhs);
-			TypedValue rhsVal = shadowValues->getValue(rhs);
-
-			//cout << lhsVal.getFloat(0) << endl;
-			//cout << rhsVal.getFloat(0) << endl;
-
-			float res = lhsVal.getFloat(0) + rhsVal.getFloat(0);
-			cout << "res : " << res << endl;
-
-			TypedValue shadowVal = ShadowContext::getValueFromFloat(res);
-			shadowValues->setValue(instruction, shadowVal);
-
-			break;
-		}
-		case llvm::Instruction::FCmp:
-		{
-			//SimpleOr(workItem, instruction);
-			break;
-		}
-		case llvm::Instruction::FDiv:
-		{
-			//SimpleOr(workItem, instruction);
-			break;
-		}
-		case llvm::Instruction::FMul:
-		{
-			//SimpleOr(workItem, instruction);
-			break;
-		}
-		case llvm::Instruction::FSub:
-		{
-			//SimpleOr(workItem, instruction);
-			break;
-		}
-
 		case llvm::Instruction::Load:
 		{
 			if(!instruction->getType()->isFloatTy()){
@@ -1098,6 +1143,32 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 			break;
 		}
+    	case llvm::Instruction::FAdd:
+		{
+			simpleFloatInstruction(workItem, instruction);
+			break;
+		}
+		case llvm::Instruction::FDiv:
+		{
+			simpleFloatInstruction(workItem, instruction);
+			break;
+		}
+		case llvm::Instruction::FMul:
+		{
+			simpleFloatInstruction(workItem, instruction);
+			break;
+		}
+		case llvm::Instruction::FSub:
+		{
+			simpleFloatInstruction(workItem, instruction);
+			break;
+		}
+		case llvm::Instruction::FCmp:
+		{
+			handleCmpInstruction(workItem, instruction);
+			break;
+		}
+
 
 
 		/////////////////////////
