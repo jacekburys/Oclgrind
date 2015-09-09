@@ -1211,7 +1211,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         }
         case llvm::Instruction::FPExt:
         {
-
+        	//with intervals check if it contains the result
             break;
         }
         case llvm::Instruction::FPToSI:
@@ -1284,12 +1284,17 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         }
         case llvm::Instruction::FPTrunc:
         {
+        	const llvm::FPTruncInst *truncInst = ((const llvm::FPTruncInst*) instruction);
+        	if(!truncInst->getDestTy()->isFloatTy()) break;
+
+        	TypedValue v = shadowContext.getMemoryPool()->clone(result);
+        	shadowValues->setValue(instruction, v);
 
             break;
         }
         case llvm::Instruction::FRem:
         {
-
+        	// is this even allowed in openCL C?
             break;
         }
         case llvm::Instruction::UIToFP:
