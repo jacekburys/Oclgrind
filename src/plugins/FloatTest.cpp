@@ -1202,13 +1202,24 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         }
         case llvm::Instruction::FPExt:
         {
-        	//TODO : with intervals check if it contains the result
+        	//with intervals check if it contains the result
+        	const llvm::FPExtInst* castInst = ((const llvm::FPExtInst*) instruction);
+        	if(!castInst->getSrcTy()->isFloatTy()) break;
+
+        	llvm::Value* arg = castInst->getOperand(0);
+        	Interval* shadowValue = shadowValues->getValue(arg);
+
+        	float l = shadowValue->lower();
+        	float u = shadowValue->upper();
+
+        	assert(l <= result.getFloat(0) && result.getFloat(0) <= u && "result not in the interval");
+
             break;
         }
         case llvm::Instruction::FPToSI:
         {
         	// convert to signed int and check if agrees with the result
-        	const llvm::CastInst* castInst = ((const llvm::CastInst*) instruction);
+        	const llvm::FPToSIInst* castInst = ((const llvm::FPToSIInst*) instruction);
 
         	if(!castInst->getSrcTy()->isFloatTy()) break;
 
