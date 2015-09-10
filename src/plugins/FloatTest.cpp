@@ -841,8 +841,7 @@ bool FloatTest::handleBuiltinFunction(const WorkItem *workItem, string name,
 }
 */
 
-// not used
-/*
+
 void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm::IntrinsicInst *I)
 {
     switch (I->getIntrinsicID())
@@ -850,9 +849,10 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
         case llvm::Intrinsic::fmuladd:
         {
         	// TODO : handle fmuladd
-            //SimpleOr(workItem, I);
             break;
         }
+        // TODO : handle memcpy and memset
+        /*
         case llvm::Intrinsic::memcpy:
         {
             const llvm::MemCpyInst *memcpyInst = (const llvm::MemCpyInst*)I;
@@ -923,6 +923,7 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
 
             break;
         }
+        */
         case llvm::Intrinsic::dbg_declare:
             //Do nothing
             break;
@@ -939,7 +940,7 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
             FATAL_ERROR("Unsupported intrinsic %s", llvm::Intrinsic::getName(I->getIntrinsicID()).c_str());
     }
 }
-*/
+
 
 void FloatTest::hostMemoryStore(const Memory *memory,
                              size_t address, size_t size,
@@ -1088,11 +1089,13 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
     	// FOR FLOAT TEST
     	case llvm::Instruction::Alloca:
 		{
+			cout << "got alloca" << endl;
 			const llvm::AllocaInst *allocaInst = ((const llvm::AllocaInst*)instruction);
 
-			if(!allocaInst->getType()->isFloatTy()) break;
+			if(!allocaInst->getAllocatedType()->isFloatTy()) break;
 
 			size_t address = result.getPointer();
+			cout << "address : " << address << endl;
 
 			shadowValues->setValue(instruction, ShadowContext::getUninitializedInterval());
 
@@ -1138,39 +1141,20 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 		}
 		case llvm::Instruction::Load:
 		{
-			if(!instruction->getType()->isFloatTy()){
-				cout << "not float type" << endl;
-				break;
-			}
+			if(!instruction->getType()->isFloatTy()) break;
 
 			assert(instruction->getType()->isSized() && "Load type must have size");
 			const llvm::LoadInst *loadInst = ((const llvm::LoadInst*)instruction);
-			//const llvm::Value *Addr = loadInst->getPointerOperand();
+			const llvm::Value *Addr = loadInst->getPointerOperand();
 
-			//size_t address = workItem->getOperand(Addr).getPointer();
-			//unsigned addrSpace = loadInst->getPointerAddressSpace();
+            size_t address = workItem->getOperand(Addr).getPointer();
+            unsigned addrSpace = loadInst->getPointerAddressSpace();
 
-			Interval* v = ShadowContext::getIntervalFromFloat(result.getFloat(0));
+			//Interval* v = ShadowContext::getIntervalFromFloat(result.getFloat(0));
+			Interval* v = loadShadowMemory(addrSpace, address, workItem);
 			cout << "load : " << v->lower() << " " << v->upper() << endl;
 
-			// I dont know why it was loading originally - Ask Moritz
-			//loadShadowMemory(addrSpace, address, v, workItem);
-
 			shadowValues->setValue(instruction, v);
-
-			// Check shadow of address
-			//TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
-
-			/*
-			if(!ShadowContext::isCleanValue(addrShadow))
-			{
-				logUninitializedAddress(addrSpace, address, false);
-			}
-			*/
-
-//            if (I.isAtomic())
-//                I.setOrdering(addAcquireOrdering(I.getOrdering()));
-
 			break;
 		}
     	case llvm::Instruction::FAdd:
@@ -1214,7 +1198,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         }
         case llvm::Instruction::FPExt:
         {
-        	//with intervals check if it contains the result
+        	//TODO : with intervals check if it contains the result
             break;
         }
         case llvm::Instruction::FPToSI:
@@ -1312,6 +1296,127 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             break;
         }
 
+        // CALL/RET
+
+        case llvm::Instruction::Call:
+        {
+            const llvm::CallInst *callInst = ((const llvm::CallInst*)instruction);
+            const llvm::Function *function = callInst->getCalledFunction();
+
+            // Check for indirect function calls
+            if (!function)
+            {
+                // Resolve indirect function pointer
+                const llvm::Value *func = callInst->getCalledValue();
+                const llvm::Value *funcPtr = ((const llvm::User*)func)->getOperand(0);
+                function = (const llvm::Function*)funcPtr;
+            }
+
+            assert(!function->isVarArg() && "Variadic functions are not supported!");
+
+            // For inline asm, do the usual thing: check argument shadow and mark all
+            // outputs as clean. Note that any side effects of the inline asm that are
+            // not immediately visible in its constraints are not handled.
+            /*
+            if (callInst->isInlineAsm())
+            {
+                shadowValues->setValue(instruction, ShadowContext::getCleanValue(instruction));
+                break;
+            }
+
+            if(const llvm::IntrinsicInst *II = llvm::dyn_cast<const llvm::IntrinsicInst>(instruction))
+            {
+                handleIntrinsicInstruction(workItem, II);
+                break;
+            }
+
+            if(function->isDeclaration())
+            {
+                if(!handleBuiltinFunction(workItem, function->getName().str(), callInst, result))
+                {
+                    // Handle external function calls
+                    checkAllOperandsDefined(workItem, instruction);
+
+                    if(callInst->getType()->isSized())
+                    {
+                        // Set return value only if function is non-void
+                        shadowValues->setValue(instruction, ShadowContext::getCleanValue(instruction));
+                    }
+                }
+                break;
+            }
+             */
+            assert(!llvm::isa<const llvm::IntrinsicInst>(instruction) && "intrinsics are handled elsewhere");
+
+            // Fresh values for function
+            ShadowFrame *values = shadowValues->createCleanShadowFrame();
+
+            llvm::Function::const_arg_iterator argItr;
+            for (argItr = function->arg_begin(); argItr != function->arg_end(); argItr++)
+            {
+                const llvm::Value *Val = callInst->getArgOperand(argItr->getArgNo());
+
+                if(!Val->getType()->isSized()) continue;
+                if(!Val->getType()->isFloatTy()) continue;
+
+                if(argItr->hasByValAttr())
+                {
+                    assert(Val->getType()->isPointerTy() && "ByVal argument is not a pointer!");
+                    // Make new copy of shadow in private memory
+                    size_t origShadowAddress = workItem->getOperand(Val).getPointer();
+                    size_t newShadowAddress = workItem->getOperand(argItr).getPointer();
+                    ShadowMemory *mem = shadowWorkItem->getPrivateMemory();
+                    //unsigned char *origShadowData = (unsigned char*)mem->getPointer(origShadowAddress);
+                    Interval* origShadowData = mem->load(origShadowAddress);
+                    //size_t size = getTypeSize(argItr->getType()->getPointerElementType());
+
+                    // Set new shadow memory
+                    Interval* v = new Interval(*origShadowData);
+                    allocAndStoreShadowMemory(AddrSpacePrivate, newShadowAddress, v, workItem);
+                    values->setValue(argItr, v);
+                }
+                else
+                {
+                    Interval* newShadow = new Interval(*shadowContext.getValue(workItem, Val));
+                    values->setValue(argItr, newShadow);
+                }
+            }
+
+            // Now, get the shadow for the RetVal.
+            if(callInst->getType()->isSized())
+            {
+                values->setCall(callInst);
+            }
+
+            shadowValues->pushFrame(values);
+
+            break;
+        }
+
+        case llvm::Instruction::Ret:
+        {
+            const llvm::ReturnInst *retInst = ((const llvm::ReturnInst*)instruction);
+            const llvm::Value *RetVal = retInst->getReturnValue();
+
+            if(RetVal)
+            {
+                Interval* retValShadow = new Interval(*shadowContext.getValue(workItem, RetVal));
+                const llvm::CallInst *callInst = shadowValues->getCall();
+                shadowValues->popFrame();
+                shadowValues->setValue(callInst, retValShadow);
+            }
+            else
+            {
+#ifdef DUMP_SHADOW
+                // Insert pseudo value to keep numbering
+                shadowValues->setValue(instruction, ShadowContext::getCleanValue(3));
+#endif
+                shadowValues->popFrame();
+            }
+
+            break;
+        }
+
 		/////////////////////////
 
 /*
@@ -1369,102 +1474,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 #endif
             break;
         }
-        case llvm::Instruction::Call:
-        {
-            const llvm::CallInst *callInst = ((const llvm::CallInst*)instruction);
-            const llvm::Function *function = callInst->getCalledFunction();
 
-            // Check for indirect function calls
-            if (!function)
-            {
-                // Resolve indirect function pointer
-                const llvm::Value *func = callInst->getCalledValue();
-                const llvm::Value *funcPtr = ((const llvm::User*)func)->getOperand(0);
-                function = (const llvm::Function*)funcPtr;
-            }
-
-            assert(!function->isVarArg() && "Variadic functions are not supported!");
-
-            // For inline asm, do the usual thing: check argument shadow and mark all
-            // outputs as clean. Note that any side effects of the inline asm that are
-            // not immediately visible in its constraints are not handled.
-            if (callInst->isInlineAsm())
-            {
-                checkAllOperandsDefined(workItem, instruction);
-                shadowValues->setValue(instruction, ShadowContext::getCleanValue(instruction));
-                break;
-            }
-
-            if(const llvm::IntrinsicInst *II = llvm::dyn_cast<const llvm::IntrinsicInst>(instruction))
-            {
-                handleIntrinsicInstruction(workItem, II);
-                break;
-            }
-
-            if(function->isDeclaration())
-            {
-                if(!handleBuiltinFunction(workItem, function->getName().str(), callInst, result))
-                {
-                    // Handle external function calls
-                    checkAllOperandsDefined(workItem, instruction);
-
-                    if(callInst->getType()->isSized())
-                    {
-                        // Set return value only if function is non-void
-                        shadowValues->setValue(instruction, ShadowContext::getCleanValue(instruction));
-                    }
-                }
-                break;
-            }
-
-            assert(!llvm::isa<const llvm::IntrinsicInst>(instruction) && "intrinsics are handled elsewhere");
-
-            // Fresh values for function
-            ShadowFrame *values = shadowValues->createCleanShadowFrame();
-
-            llvm::Function::const_arg_iterator argItr;
-            for (argItr = function->arg_begin(); argItr != function->arg_end(); argItr++)
-            {
-                const llvm::Value *Val = callInst->getArgOperand(argItr->getArgNo());
-
-                if (!Val->getType()->isSized())
-                {
-                    continue;
-                }
-
-                if(argItr->hasByValAttr())
-                {
-                    assert(Val->getType()->isPointerTy() && "ByVal argument is not a pointer!");
-                    // Make new copy of shadow in private memory
-                    size_t origShadowAddress = workItem->getOperand(Val).getPointer();
-                    size_t newShadowAddress = workItem->getOperand(argItr).getPointer();
-                    ShadowMemory *mem = shadowWorkItem->getPrivateMemory();
-                    unsigned char *origShadowData = (unsigned char*)mem->getPointer(origShadowAddress);
-                    size_t size = getTypeSize(argItr->getType()->getPointerElementType());
-
-                    // Set new shadow memory
-                    TypedValue v = ShadowContext::getCleanValue(size);
-                    memcpy(v.data, origShadowData, size);
-                    allocAndStoreShadowMemory(AddrSpacePrivate, newShadowAddress, v, workItem);
-                    values->setValue(argItr, ShadowContext::getCleanValue(argItr));
-                }
-                else
-                {
-                    TypedValue newShadow = shadowContext.getMemoryPool()->clone(shadowContext.getValue(workItem, Val));
-                    values->setValue(argItr, newShadow);
-                }
-            }
-
-            // Now, get the shadow for the RetVal.
-            if(callInst->getType()->isSized())
-            {
-                values->setCall(callInst);
-            }
-
-            shadowValues->pushFrame(values);
-
-            break;
-        }
         case llvm::Instruction::ExtractElement:
         {
             const llvm::ExtractElementInst *extractInst = ((const llvm::ExtractElementInst*)instruction);
@@ -1664,36 +1674,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             shadowValues->setValue(instruction, newShadow);
             break;
         }
-        case llvm::Instruction::Ret:
-        {
-            const llvm::ReturnInst *retInst = ((const llvm::ReturnInst*)instruction);
-            const llvm::Value *RetVal = retInst->getReturnValue();
 
-            if(RetVal)
-            {
-                //Value *ShadowPtr = getValuePtrForRetval(RetVal, IRB);
-                //if (CheckReturnValue) {
-                //    insertShadowCheck(RetVal, &I);
-                //    Value *Shadow = getCleanValue(RetVal);
-                //    IRB.CreateAlignedStore(Shadow, ShadowPtr, kShadowTLSAlignment);
-                //} else {
-                TypedValue retValShadow = shadowContext.getMemoryPool()->clone(shadowContext.getValue(workItem, RetVal));
-                const llvm::CallInst *callInst = shadowValues->getCall();
-                shadowValues->popFrame();
-                shadowValues->setValue(callInst, retValShadow);
-                //}
-            }
-            else
-            {
-#ifdef DUMP_SHADOW
-                // Insert pseudo value to keep numbering
-                shadowValues->setValue(instruction, ShadowContext::getCleanValue(3));
-#endif
-                shadowValues->popFrame();
-            }
-
-            break;
-        }
         case llvm::Instruction::SDiv:
         {
             SimpleOr(workItem, instruction);
@@ -2422,9 +2403,9 @@ ShadowMemory::~ShadowMemory()
 
 void ShadowMemory::allocate(size_t address)
 {
-    size_t index = extractBuffer(address);
+    //size_t index = extractBuffer(address);
 
-    if(m_map.count(index))
+    if(m_map.count(address))
     {
         deallocate(address);
     }
@@ -2438,7 +2419,7 @@ void ShadowMemory::allocate(size_t address)
 
     Interval *inter = new Interval(-INF, INF);
 
-    m_map[index] = inter;
+    m_map[address] = inter;
 }
 
 void ShadowMemory::clear()
