@@ -210,7 +210,8 @@ namespace oclgrind
             //for float test
             static Interval* getUninitializedInterval();
             static Interval* getIntervalFromFloat(float f);
-
+            static int64_t intervalToInt(Interval* inter);
+            static bool isnan(Interval inter);
 
 
             inline ShadowMemory* getGlobalMemory() const
