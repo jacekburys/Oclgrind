@@ -286,7 +286,7 @@ namespace oclgrind
             std::list<std::pair<const llvm::Value*, TypedValue> > m_deferredInit;
             std::list<std::pair<const llvm::Value*, TypedValue> > m_deferredInitGroup;
             ShadowContext shadowContext;
-            MemoryPool m_pool;
+            //MemoryPool m_pool;
 
             void allocAndStoreShadowMemory(unsigned addrSpace, size_t address, Interval* inter,
                                            const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL, bool unchecked = false);

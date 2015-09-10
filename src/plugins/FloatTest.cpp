@@ -949,7 +949,6 @@ void FloatTest::hostMemoryStore(const Memory *memory,
     if(memory->getAddressSpace() == AddrSpaceGlobal)
     {
     	//TODO : handle floats here
-
         //TypedValue v = ShadowContext::getCleanValue(size);
         //allocAndStoreShadowMemory(AddrSpaceGlobal, address, v);
     }
@@ -1889,33 +1888,38 @@ void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
             continue;
         }
 
+        // handle only floats and pointers to floats
+        if(!(type->isFloatTy() || type->isFloatingPointTy())) continue;
+
         if(type->isPointerTy())
         {
             switch(type->getPointerAddressSpace())
             {
                 case AddrSpaceConstant:
                 {
-                    shadowContext.setGlobalValue(value->first, ShadowContext::getUninitializedInterval());
+                    shadowContext.setGlobalValue(value->first, ShadowContext::getIntervalFromFloat(value->second.getFloat(0)));
                     const llvm::Type *elementTy = type->getPointerElementType();
+                    assert(elementTy->isFloatTy() && "should be float type");
                     allocAndStoreShadowMemory(AddrSpaceConstant, value->second.getPointer(),
-                                              ShadowContext::getUninitializedInterval());
+                    		ShadowContext::getIntervalFromFloat(value->second.getFloat(0)));
                     break;
                 }
                 case AddrSpaceGlobal:
                 {
-                    // Global pointer kernel arguments
-                    // value->second.data == ptr
-                    // value->second.size == ptr size
                     size_t address = value->second.getPointer();
 
+                    /*
                     if(m_context->getGlobalMemory()->isAddressValid(address) &&
                        !shadowContext.getGlobalMemory()->isAddressValid(address))
                     {
+
                         // Allocate poisoned global memory if there was no host store
                         size_t size = m_context->getGlobalMemory()->getBuffer(address)->size;
                         allocAndStoreShadowMemory(AddrSpaceGlobal, address,
                                                   ShadowContext::getUninitializedInterval(), NULL, NULL, true);
-                    }
+
+                	}
+                	*/
 
                     m_deferredInit.push_back(*value);
                     break;
@@ -1933,7 +1937,8 @@ void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
                     else
                     {
                         // Variables have a global pointer
-                        shadowContext.setGlobalValue(value->first, ShadowContext::getUninitializedInterval());
+                        shadowContext.setGlobalValue(value->first,
+                        		ShadowContext::getIntervalFromFloat(value->second.getFloat(0)));
                     }
 
                     m_deferredInitGroup.push_back(*value);
@@ -1956,7 +1961,8 @@ void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
                         // value->second.data == val
                         // value->second.size == val size
                         m_deferredInit.push_back(*value);
-                        shadowContext.setGlobalValue(value->first, ShadowContext::getUninitializedInterval());
+                        shadowContext.setGlobalValue(value->first,
+                        		ShadowContext::getIntervalFromFloat(value->second.getFloat(0)));
                     }
                     break;
                 }
@@ -2150,6 +2156,7 @@ void FloatTest::storeShadowMemory(unsigned addrSpace, size_t address, Interval* 
 // TODO : store floats
 void FloatTest::workItemBegin(const WorkItem *workItem)
 {
+	//TODO : memory pool not needed anymore, remove it
     shadowContext.createMemoryPool();
     shadowContext.allocateWorkItems();
     ShadowWorkItem *shadowWI = shadowContext.createShadowWorkItem(workItem);
@@ -2158,6 +2165,8 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
     for(auto value : m_deferredInit)
     {
         const llvm::Type *type = value.first->getType();
+
+        assert((type->isFloatTy() || type->isFloatingPointTy()) && "only floats or pointers to floats allowed");
 
         if(type->isPointerTy())
         {
@@ -2176,7 +2185,8 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
                     // Local pointer kernel arguments
                     // value.second.data == NULL
                     // value.second.size == val size
-                    shadowValues->setValue(value.first, ShadowContext::getUninitializedInterval());
+                    shadowValues->setValue(value.first,
+                    		ShadowContext::getIntervalFromFloat(value.second.getFloat(0)));
                     break;
                 }
                 case AddrSpacePrivate:
@@ -2190,8 +2200,9 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
                         // value.second.size == val size
                         size_t address = workItem->getOperand(value.first).getPointer();
                         allocAndStoreShadowMemory(AddrSpacePrivate, address,
-                        			ShadowContext::getUninitializedInterval(), workItem);
-                        shadowValues->setValue(value.first, ShadowContext::getUninitializedInterval());
+                        		ShadowContext::getIntervalFromFloat(value.second.getFloat(0)), workItem);
+                        shadowValues->setValue(value.first,
+                        		ShadowContext::getIntervalFromFloat(value.second.getFloat(0)));
                     }
                     else
                     {
@@ -2200,7 +2211,7 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
                         // value.second.size == val size
                         size_t address = workItem->getOperand(value.first).getPointer();
                         allocAndStoreShadowMemory(AddrSpacePrivate, address,
-                        		ShadowContext::getUninitializedInterval(), workItem);
+                        		ShadowContext::getIntervalFromFloat(value.second.getFloat(0)), workItem);
                     }
                     break;
                 }
@@ -2211,7 +2222,7 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
             // Non pointer type kernel arguments
             // value->second.data == val
             // value->second.size == val size
-            shadowValues->setValue(value.first, ShadowContext::getUninitializedInterval());
+            shadowValues->setValue(value.first, ShadowContext::getIntervalFromFloat(value.second.getFloat(0)));
         }
     }
 }
@@ -2220,7 +2231,7 @@ void FloatTest::workItemComplete(const WorkItem *workItem)
 {
     shadowContext.destroyShadowWorkItem(workItem);
     shadowContext.freeWorkItems();
-    shadowContext.destroyMemoryPool();
+    //shadowContext.destroyMemoryPool();
 }
 
 void FloatTest::workGroupBegin(const WorkGroup *workGroup)
@@ -2403,19 +2414,10 @@ ShadowMemory::~ShadowMemory()
 
 void ShadowMemory::allocate(size_t address)
 {
-    //size_t index = extractBuffer(address);
-
     if(m_map.count(address))
     {
         deallocate(address);
     }
-
-    /*
-    Buffer *buffer = new Buffer();
-    buffer->size   = size;
-    buffer->flags  = 0;
-    buffer->data   = new unsigned char[size];
-	*/
 
     Interval *inter = new Interval(-INF, INF);
 
@@ -2427,17 +2429,13 @@ void ShadowMemory::clear()
     MemoryMap::iterator mItr;
     for(mItr = m_map.begin(); mItr != m_map.end(); ++mItr)
     {
-        //delete[] mItr->second->data;
         delete mItr->second;
     }
 }
 
 void ShadowMemory::deallocate(size_t address)
 {
-    //size_t index = extractBuffer(address);
-
     assert(m_map.count(address) && "Cannot deallocate non existing memory!");
-
     delete m_map.at(address);
     m_map.at(address) = NULL;
 }
@@ -2488,38 +2486,27 @@ size_t ShadowMemory::extractOffset(size_t address) const
 
 void* ShadowMemory::getPointer(size_t address) const
 {
-    //size_t index = extractBuffer(address);
-    //size_t offset= extractOffset(address);
-
     assert(m_map.count(address) && "No shadow memory found!");
-
     return m_map.at(address);
 }
 
 bool ShadowMemory::isAddressValid(size_t address) const
 {
-    //size_t index = extractBuffer(address);
-    //size_t offset = extractOffset(address);
     return m_map.count(address);
 }
 
 Interval* ShadowMemory::load(size_t address) const
 {
-    //size_t index = extractBuffer(address);
-    //size_t offset = extractOffset(address);
-
     if(isAddressValid(address))
     {
         assert(m_map.count(address) && "No shadow memory found!");
-        //memcpy(dst, m_map.at(index)->data + offset, size);
         return m_map.at(address);
     }
     else
     {
     	cout << "poisoned load" << endl;
     	assert(false && "couldn't find interval at this address");
-        //TypedValue v = ShadowContext::getPoisonedValue(size);
-       // memcpy(dst, v.data, size);
+
     }
 }
 
@@ -2691,47 +2678,7 @@ void ShadowContext::freeWorkGroups()
     }
 }
 
-/*
-TypedValue ShadowContext::getCleanValue(unsigned size)
-{
-    TypedValue v = {
-        size,
-        1,
-        m_workSpace.memoryPool->alloc(size)
-    };
 
-    memset(v.data, 0, size);
-
-    return v;
-}
-
-TypedValue ShadowContext::getCleanValue(TypedValue v)
-{
-    TypedValue c = {
-        v.size,
-        v.num,
-        m_workSpace.memoryPool->alloc(v.size*v.num)
-    };
-
-    memset(c.data, 0, v.size*v.num);
-
-    return c;
-}
-
-TypedValue ShadowContext::getCleanValue(const llvm::Value *V)
-{
-    pair<unsigned,unsigned> size = getValueSize(V);
-    TypedValue v = {
-        size.first,
-        size.second,
-        m_workSpace.memoryPool->alloc(size.first*size.second)
-    };
-
-    memset(v.data, 0, v.size*v.num);
-
-    return v;
-}
-*/
 
 //for float_test
 
@@ -2744,7 +2691,7 @@ Interval* ShadowContext::getIntervalFromFloat(float f){
 }
 
 
-int64_t intervalToInt(Interval* inter){
+int64_t ShadowContext::intervalToInt(Interval* inter){
 	int64_t l = inter->lower();
 	int64_t u = inter->upper();
 
