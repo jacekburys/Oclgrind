@@ -844,11 +844,29 @@ bool FloatTest::handleBuiltinFunction(const WorkItem *workItem, string name,
 
 void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm::IntrinsicInst *I)
 {
+
+	ShadowWorkItem *shadowWorkItem = shadowContext.getShadowWorkItem(workItem);
+	ShadowValues *shadowValues = shadowWorkItem->getValues();
+
     switch (I->getIntrinsicID())
     {
         case llvm::Intrinsic::fmuladd:
         {
-        	// TODO : handle fmuladd
+        	cout << "got fmuladd" << endl;
+        	llvm::Value* a = I->getOperand(0);
+        	llvm::Value* b = I->getOperand(1);
+        	llvm::Value* c = I->getOperand(2);
+
+        	Interval aVal = *shadowValues->getValue(a);
+        	Interval bVal = *shadowValues->getValue(b);
+        	Interval cVal = *shadowValues->getValue(c);
+
+        	Interval* res = new Interval(aVal * bVal + cVal);
+
+        	cout << "res : " << res->lower() << " " << res->upper() << endl;
+
+        	shadowValues->setValue(I, res);
+
             break;
         }
         // TODO : handle memcpy and memset
@@ -1125,7 +1143,6 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 					const llvm::APFloat ap = fp->getValueAPF();
 					float floatVal = fp->getValueAPF().convertToFloat();
-					cout << floatVal << endl;
 
 					Interval* shadowVal = ShadowContext::getIntervalFromFloat(floatVal);
 					storeShadowMemory(addrSpace, address, shadowVal, workItem);
@@ -1133,7 +1150,6 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 				}else{
 					Interval* shadowVal = shadowContext.getValue(workItem, Val);
-					cout << "not a float constant : " << shadowVal->lower() << endl;
 					storeShadowMemory(addrSpace, address, shadowVal, workItem);
 					shadowValues->setValue(Addr, shadowVal);
 				}
@@ -1339,6 +1355,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
                 shadowValues->setValue(instruction, ShadowContext::getCleanValue(instruction));
                 break;
             }
+            */
 
             if(const llvm::IntrinsicInst *II = llvm::dyn_cast<const llvm::IntrinsicInst>(instruction))
             {
@@ -1346,6 +1363,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
                 break;
             }
 
+            /*
             if(function->isDeclaration())
             {
                 if(!handleBuiltinFunction(workItem, function->getName().str(), callInst, result))
