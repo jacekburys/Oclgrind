@@ -1221,16 +1221,16 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
         	switch(castInst->getDestTy()->getIntegerBitWidth()){
         	case 8:
-        		//shadow = (int8_t)shadowValue.getFloat(0);
+        		shadow = (int8_t) ShadowContext::intervalToInt(shadowValue);
         		break;
         	case 16:
-				//shadow = (int16_t)shadowValue.getFloat(0);
+				shadow = (int16_t) ShadowContext::intervalToInt(shadowValue);
         		break;
         	case 32:
-				//shadow = (int32_t)shadowValue.getFloat(0);
+				shadow = (int32_t) ShadowContext::intervalToInt(shadowValue);
         		break;
         	case 64:
-				//shadow = (int64_t)shadowValue.getFloat(0);
+				shadow = (int64_t) ShadowContext::intervalToInt(shadowValue);
         		break;
         	default:
         		assert(false && "unsupported size");
@@ -1255,16 +1255,16 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 			switch(castInst->getDestTy()->getIntegerBitWidth()){
 			case 8:
-				//shadow = (uint8_t)shadowValue.getFloat(0);
+				shadow = (uint8_t) ShadowContext::intervalToInt(shadowValue);
 				break;
 			case 16:
-				//shadow = (uint16_t)shadowValue.getFloat(0);
+				shadow = (uint16_t) ShadowContext::intervalToInt(shadowValue);
 				break;
 			case 32:
-				//shadow = (uint32_t)shadowValue.getFloat(0);
+				shadow = (uint32_t) ShadowContext::intervalToInt(shadowValue);
 				break;
 			case 64:
-				//shadow = (uint64_t)shadowValue.getFloat(0);
+				shadow = (uint64_t) ShadowContext::intervalToInt(shadowValue);
 				break;
 			default:
 				assert(false && "unsupported size");
@@ -1319,6 +1319,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
             assert(!function->isVarArg() && "Variadic functions are not supported!");
 
+            // TODO :
             // For inline asm, do the usual thing: check argument shadow and mark all
             // outputs as clean. Note that any side effects of the inline asm that are
             // not immediately visible in its constraints are not handled.
@@ -1371,9 +1372,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
                     size_t origShadowAddress = workItem->getOperand(Val).getPointer();
                     size_t newShadowAddress = workItem->getOperand(argItr).getPointer();
                     ShadowMemory *mem = shadowWorkItem->getPrivateMemory();
-                    //unsigned char *origShadowData = (unsigned char*)mem->getPointer(origShadowAddress);
                     Interval* origShadowData = mem->load(origShadowAddress);
-                    //size_t size = getTypeSize(argItr->getType()->getPointerElementType());
 
                     // Set new shadow memory
                     Interval* v = new Interval(*origShadowData);
