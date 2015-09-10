@@ -59,7 +59,7 @@ FloatTest::~FloatTest()
     shadowContext.destroyMemoryPool();
 }
 
-void FloatTest::allocAndStoreShadowMemory(unsigned addrSpace, size_t address, TypedValue SM,
+void FloatTest::allocAndStoreShadowMemory(unsigned addrSpace, size_t address, Interval* inter,
         const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
 {
     if(addrSpace == AddrSpaceConstant)
@@ -70,8 +70,8 @@ void FloatTest::allocAndStoreShadowMemory(unsigned addrSpace, size_t address, Ty
     }
 
     ShadowMemory *memory = getShadowMemory(addrSpace, workItem, workGroup);
-    memory->allocate(address, SM.size*SM.num);
-    storeShadowMemory(addrSpace, address, SM, workItem, workGroup, unchecked);
+    memory->allocate(address);
+    storeShadowMemory(addrSpace, address, inter, workItem, workGroup, unchecked);
 }
 
 // this won't be used
@@ -139,6 +139,8 @@ void FloatTest::checkStructMemcpy(const WorkItem *workItem, const llvm::Value *s
     */
 }
 
+//not used
+/*
 void FloatTest::copyShadowMemory(unsigned dstAddrSpace, size_t dst, unsigned srcAddrSpace, size_t src, unsigned size, const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
 {
     copyShadowMemoryStrided(dstAddrSpace, dst, srcAddrSpace, src, 1, 1, size, workItem, workGroup, unchecked);
@@ -162,6 +164,7 @@ void FloatTest::copyShadowMemoryStrided(unsigned dstAddrSpace, size_t dst, unsig
 
     delete[] v.data;
 }
+*/
 
 std::string FloatTest::extractUnmangledName(const std::string fullname)
 {
@@ -959,31 +962,31 @@ void FloatTest::simpleFloatInstruction(const WorkItem *workItem, const llvm::Ins
 
 	ShadowValues *shadowValues = shadowContext.getShadowWorkItem(workItem)->getValues();
 
-	TypedValue lhsVal = shadowValues->getValue(lhs);
-	TypedValue rhsVal = shadowValues->getValue(rhs);
+	Interval lhsVal = *(shadowValues->getValue(lhs));
+	Interval rhsVal = *(shadowValues->getValue(rhs));
 
-	float res;
+	Interval res;
 	switch(instruction->getOpcode()){
 	case llvm::Instruction::FAdd:
-		res = lhsVal.getFloat(0) + rhsVal.getFloat(0);
+		res = lhsVal + rhsVal;
 		break;
 	case llvm::Instruction::Sub:
-		res = lhsVal.getFloat(0) - rhsVal.getFloat(0);
+		res = lhsVal - rhsVal;
 		break;
 	case llvm::Instruction::FMul:
-		res = lhsVal.getFloat(0) * rhsVal.getFloat(0);
+		res = lhsVal * rhsVal;
 		break;
 	case llvm::Instruction::FDiv:
-		res = lhsVal.getFloat(0) / rhsVal.getFloat(0);
+		res = lhsVal / rhsVal;
 		break;
 	default:
 		assert(false && "unsupported instruction");
 		break;
 	}
 
-	cout << "result = " << res << endl;
+	cout << "result = " << res.lower() << " " << res.upper() << endl;
 
-	TypedValue shadowVal = ShadowContext::getValueFromFloat(res);
+	Interval* shadowVal = new Interval(res);
 	shadowValues->setValue(instruction, shadowVal);
 
 }
@@ -1000,11 +1003,11 @@ void FloatTest::handleCmpInstruction(const WorkItem *workItem, const llvm::Instr
 
     ShadowValues *shadowValues = shadowContext.getShadowWorkItem(workItem)->getValues();
 
-    float lhsVal = shadowValues->getValue(lhs).getFloat(0);
-    float rhsVal = shadowValues->getValue(rhs).getFloat(0);
+    Interval lhsVal = *(shadowValues->getValue(lhs));
+    Interval rhsVal = *(shadowValues->getValue(rhs));
 
-    cout << "lhs : " << lhsVal << endl;
-    cout << "rhs : " << rhsVal << endl;
+    cout << "lhs : " << lhsVal.lower() << " " << lhsVal.upper() << endl;
+    cout << "rhs : " << rhsVal.lower() << " " << rhsVal.upper() << endl;
 
     bool actual = result.getSInt();
 
@@ -1013,46 +1016,46 @@ void FloatTest::handleCmpInstruction(const WorkItem *workItem, const llvm::Instr
 		assert(actual == false && "FCMP_FALSE");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_OEQ:  ///< 0 0 0 1    True if ordered and equal
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal == rhsVal) == actual && "FCMP_OEQ");
+		//assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal == rhsVal) == actual && "FCMP_OEQ");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_OGT:  ///< 0 0 1 0    True if ordered and greater than
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal > rhsVal) == actual && "FCMP_OGT");
+		//assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal > rhsVal) == actual && "FCMP_OGT");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_OGE:  ///< 0 0 1 1    True if ordered and greater than or equal
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal >= rhsVal) == actual && "FCMP_OGE");
+		//assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal >= rhsVal) == actual && "FCMP_OGE");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_OLT:  ///< 0 1 0 0    True if ordered and less than
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal < rhsVal) == actual && "FCMP_OLT");
+		//assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal < rhsVal) == actual && "FCMP_OLT");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_OLE:  ///< 0 1 0 1    True if ordered and less than or equal
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal <= rhsVal) == actual && "FCMP_OLE");
+		//assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal <= rhsVal) == actual && "FCMP_OLE");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_ONE:  ///< 0 1 1 0    True if ordered and operands are unequal
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal != rhsVal) == actual && "FCMP_ONE");
+		//assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal != rhsVal) == actual && "FCMP_ONE");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_ORD:  ///< 0 1 1 1    True if ordered (no nans)
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && "FCMP_ORD");
+		//assert(!isnan(lhsVal) && !isnan(lhsVal) && "FCMP_ORD");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_UNO:  ///< 1 0 0 0    True if unordered: isnan(X) | isnan(Y)
-		assert(isnan(lhsVal) || isnan(rhsVal));
+		//assert(isnan(lhsVal) || isnan(rhsVal));
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_UEQ:  ///< 1 0 0 1    True if unordered or equal
-		assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal == rhsVal) == actual && "FCMP_UEQ");
+		//assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal == rhsVal) == actual && "FCMP_UEQ");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_UGT:  ///< 1 0 1 0    True if unordered or greater than
-		assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal > rhsVal) == actual && "FCMP_UGT");
+		//assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal > rhsVal) == actual && "FCMP_UGT");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_UGE:  ///< 1 0 1 1    True if unordered, greater than, or equal
-		assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal >= rhsVal) == actual && "FCMP_UGE");
+		//assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal >= rhsVal) == actual && "FCMP_UGE");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_ULT:  ///< 1 1 0 0    True if unordered or less than
-		assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal < rhsVal) == actual && "FCMP_ULT");
+		//assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal < rhsVal) == actual && "FCMP_ULT");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_ULE:  ///< 1 1 0 1    True if unordered, less than, or equal
-		assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal <= rhsVal) == actual && "FCMP_ULE");
+		//assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal <= rhsVal) == actual && "FCMP_ULE");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_UNE:  ///< 1 1 1 0    True if unordered or not equal
-		assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal != rhsVal) == actual && "FCMP_UNE");
+		//assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal != rhsVal) == actual && "FCMP_UNE");
 		break;
 	case llvm::FCmpInst::Predicate::FCMP_TRUE: ///< 1 1 1 1    Always true (always folded)
 		assert(actual == true && "FCMP_TRUE");
@@ -1091,9 +1094,9 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 			size_t address = result.getPointer();
 
-			shadowValues->setValue(instruction, ShadowContext::getUninitializedValue(instruction));
+			shadowValues->setValue(instruction, ShadowContext::getUninitializedInterval());
 
-			TypedValue v = ShadowContext::getUninitializedValue(allocaInst->getAllocatedType());
+			Interval* v = ShadowContext::getUninitializedInterval();
 			allocAndStoreShadowMemory(AddrSpacePrivate, address, v, workItem);
 			break;
 		}
@@ -1117,13 +1120,13 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 					float floatVal = fp->getValueAPF().convertToFloat();
 					cout << floatVal << endl;
 
-					TypedValue shadowVal = ShadowContext::getValueFromFloat(floatVal);
+					Interval* shadowVal = ShadowContext::getIntervalFromFloat(floatVal);
 					storeShadowMemory(addrSpace, address, shadowVal, workItem);
 					shadowValues->setValue(Addr, shadowVal);
 
 				}else{
-					TypedValue shadowVal = shadowContext.getValue(workItem, Val);
-					cout << "not a float constant : " << shadowVal.getFloat(0) << endl;
+					Interval* shadowVal = shadowContext.getValue(workItem, Val);
+					cout << "not a float constant : " << shadowVal->lower() << endl;
 					storeShadowMemory(addrSpace, address, shadowVal, workItem);
 					shadowValues->setValue(Addr, shadowVal);
 				}
@@ -1147,8 +1150,8 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 			//size_t address = workItem->getOperand(Addr).getPointer();
 			//unsigned addrSpace = loadInst->getPointerAddressSpace();
 
-			TypedValue v = shadowContext.getMemoryPool()->clone(result);
-			cout << "load : " << v.getFloat() << endl;
+			Interval* v = ShadowContext::getIntervalFromFloat(result.getFloat(0));
+			cout << "load : " << v->lower() << " " << v->upper() << endl;
 
 			// I dont know why it was loading originally - Ask Moritz
 			//loadShadowMemory(addrSpace, address, v, workItem);
@@ -1204,7 +1207,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         	if(!castInst->getDestTy()->isFloatTy()) break;
         	cout << "got cast to float" << endl;
 
-        	TypedValue v = shadowContext.getMemoryPool()->clone(result);
+        	Interval* v = ShadowContext::getIntervalFromFloat(result.getFloat(0));
         	shadowValues->setValue(instruction, v);
 
             break;
@@ -1222,23 +1225,23 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         	if(!castInst->getSrcTy()->isFloatTy()) break;
 
         	llvm::Value *arg   = castInst->getOperand(0);
-        	TypedValue shadowValue = shadowValues->getValue(arg);
+        	Interval* shadowValue = shadowValues->getValue(arg);
 
         	int64_t actual = result.getSInt(0);
         	int64_t shadow = 0;
 
         	switch(castInst->getDestTy()->getIntegerBitWidth()){
         	case 8:
-        		shadow = (int8_t)shadowValue.getFloat(0);
+        		//shadow = (int8_t)shadowValue.getFloat(0);
         		break;
         	case 16:
-				shadow = (int16_t)shadowValue.getFloat(0);
+				//shadow = (int16_t)shadowValue.getFloat(0);
         		break;
         	case 32:
-				shadow = (int32_t)shadowValue.getFloat(0);
+				//shadow = (int32_t)shadowValue.getFloat(0);
         		break;
         	case 64:
-				shadow = (int64_t)shadowValue.getFloat(0);
+				//shadow = (int64_t)shadowValue.getFloat(0);
         		break;
         	default:
         		assert(false && "unsupported size");
@@ -1256,23 +1259,23 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 			if(!castInst->getSrcTy()->isFloatTy()) break;
 
 			llvm::Value *arg   = castInst->getOperand(0);
-			TypedValue shadowValue = shadowValues->getValue(arg);
+			Interval* shadowValue = shadowValues->getValue(arg);
 
 			uint64_t actual = result.getUInt(0);
 			uint64_t shadow = 0;
 
 			switch(castInst->getDestTy()->getIntegerBitWidth()){
 			case 8:
-				shadow = (uint8_t)shadowValue.getFloat(0);
+				//shadow = (uint8_t)shadowValue.getFloat(0);
 				break;
 			case 16:
-				shadow = (uint16_t)shadowValue.getFloat(0);
+				//shadow = (uint16_t)shadowValue.getFloat(0);
 				break;
 			case 32:
-				shadow = (uint32_t)shadowValue.getFloat(0);
+				//shadow = (uint32_t)shadowValue.getFloat(0);
 				break;
 			case 64:
-				shadow = (uint64_t)shadowValue.getFloat(0);
+				//shadow = (uint64_t)shadowValue.getFloat(0);
 				break;
 			default:
 				assert(false && "unsupported size");
@@ -1287,7 +1290,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         	const llvm::FPTruncInst *truncInst = ((const llvm::FPTruncInst*) instruction);
         	if(!truncInst->getDestTy()->isFloatTy()) break;
 
-        	TypedValue v = shadowContext.getMemoryPool()->clone(result);
+        	Interval* v = ShadowContext::getIntervalFromFloat(result.getFloat(0));
         	shadowValues->setValue(instruction, v);
 
             break;
@@ -1304,7 +1307,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 			if(!castInst->getDestTy()->isFloatTy()) break;
 			cout << "got cast to float" << endl;
 
-			TypedValue v = shadowContext.getMemoryPool()->clone(result);
+			Interval* v = ShadowContext::getIntervalFromFloat(result.getFloat(0));
 			shadowValues->setValue(instruction, v);
             break;
         }
@@ -1911,14 +1914,10 @@ void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
             {
                 case AddrSpaceConstant:
                 {
-                    // Constants
-                    // value->second.data == ptr
-                    // value->second.size == ptr size
-                    TypedValue uninitializedValue = m_pool.clone(ShadowContext::getUninitializedValue(value->first));
-                    shadowContext.setGlobalValue(value->first, uninitializedValue);
+                    shadowContext.setGlobalValue(value->first, ShadowContext::getUninitializedInterval());
                     const llvm::Type *elementTy = type->getPointerElementType();
                     allocAndStoreShadowMemory(AddrSpaceConstant, value->second.getPointer(),
-                                              ShadowContext::getUninitializedValue(elementTy));
+                                              ShadowContext::getUninitializedInterval());
                     break;
                 }
                 case AddrSpaceGlobal:
@@ -1934,7 +1933,7 @@ void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
                         // Allocate poisoned global memory if there was no host store
                         size_t size = m_context->getGlobalMemory()->getBuffer(address)->size;
                         allocAndStoreShadowMemory(AddrSpaceGlobal, address,
-                                                  ShadowContext::getUninitializedValue(size), NULL, NULL, true);
+                                                  ShadowContext::getUninitializedInterval(), NULL, NULL, true);
                     }
 
                     m_deferredInit.push_back(*value);
@@ -1953,8 +1952,7 @@ void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
                     else
                     {
                         // Variables have a global pointer
-                        TypedValue uninitializedValue = m_pool.clone(ShadowContext::getUninitializedValue(value->first));
-                        shadowContext.setGlobalValue(value->first, uninitializedValue);
+                        shadowContext.setGlobalValue(value->first, ShadowContext::getUninitializedInterval());
                     }
 
                     m_deferredInitGroup.push_back(*value);
@@ -1977,9 +1975,7 @@ void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
                         // value->second.data == val
                         // value->second.size == val size
                         m_deferredInit.push_back(*value);
-                        TypedValue uninitializedValue = m_pool.clone(ShadowContext::getUninitializedValue(value->first));
-                        //TODO: Structs can have posioned padding bytes. Is this important?
-                        shadowContext.setGlobalValue(value->first, uninitializedValue);
+                        shadowContext.setGlobalValue(value->first, ShadowContext::getUninitializedInterval());
                     }
                     break;
                 }
@@ -1997,21 +1993,17 @@ void FloatTest::kernelBegin(const KernelInvocation *kernelInvocation)
     }
 }
 
-void FloatTest::loadShadowMemory(unsigned addrSpace, size_t address, TypedValue &SM, const WorkItem *workItem, const WorkGroup *workGroup)
+Interval* FloatTest::loadShadowMemory(unsigned addrSpace, size_t address, const WorkItem *workItem, const WorkGroup *workGroup)
 {
     if(addrSpace == AddrSpaceConstant)
     {
         //TODO: Eventually load value
-        memset(SM.data, 0, SM.size*SM.num);
-        return;
+        //memset(SM.data, 0, SM.size*SM.num);
+        return NULL;
     }
 
     ShadowMemory *memory = getShadowMemory(addrSpace, workItem, workGroup);
-    memory->load(SM.data, address, SM.size*SM.num);
-
-#ifdef DUMP_SHADOW
-    cout << "Loaded " << hex << SM << " from space " << dec << addrSpace << " at address " << hex << address << endl;
-#endif
+    return memory->load(address);
 }
 
 void FloatTest::logUninitializedAddress(unsigned int addrSpace, size_t address, bool write) const
@@ -2068,7 +2060,7 @@ void FloatTest::memoryMap(const Memory *memory, size_t address,
     if(!(flags & CL_MAP_READ))
     {
         allocAndStoreShadowMemory(memory->getAddressSpace(), address + offset,
-                ShadowContext::getUninitializedValue(size));
+                ShadowContext::getUninitializedInterval());
     }
 }
 
@@ -2091,12 +2083,14 @@ void FloatTest::SimpleOr(const WorkItem *workItem, const llvm::Instruction *I)
 }
 */
 
+// this isn't used anywhere
+/*
 void FloatTest::SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *CI)
 {
     const llvm::Value *Addr = CI->getArgOperand(0);
     unsigned addrSpace = Addr->getType()->getPointerAddressSpace();
     size_t address = workItem->getOperand(Addr).getPointer();
-    TypedValue argShadow = shadowContext.getValue(workItem, CI->getArgOperand(1));
+    Interval argShadow = shadowContext.getValue(workItem, CI->getArgOperand(1));
     TypedValue oldShadow = {
         4,
         1,
@@ -2112,7 +2106,7 @@ void FloatTest::SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *C
 
     loadShadowMemory(addrSpace, address, oldShadow, workItem);
 
-    /*
+
     if(!ShadowContext::isCleanValue(argShadow) || !ShadowContext::isCleanValue(oldShadow))
     {
         newShadow = ShadowContext::getPoisonedValue(4);
@@ -2121,7 +2115,7 @@ void FloatTest::SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *C
     {
         newShadow = ShadowContext::getCleanValue(4);
     }
-    */
+
 
     storeShadowMemory(addrSpace, address, newShadow, workItem);
 
@@ -2136,15 +2130,16 @@ void FloatTest::SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *C
     // Check shadow of address
     TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
 
-    /*
+
     if(!ShadowContext::isCleanValue(addrShadow))
     {
         logUninitializedAddress(addrSpace, address);
     }
-    */
-}
 
-void FloatTest::storeShadowMemory(unsigned addrSpace, size_t address, TypedValue SM, const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
+}
+*/
+
+void FloatTest::storeShadowMemory(unsigned addrSpace, size_t address, Interval* inter, const WorkItem *workItem, const WorkGroup *workGroup, bool unchecked)
 {
 #ifdef DUMP_SHADOW
     cout << "Store " << hex << SM << " to space " << dec << addrSpace << " at address " << hex << address << endl;
@@ -2168,7 +2163,7 @@ void FloatTest::storeShadowMemory(unsigned addrSpace, size_t address, TypedValue
     }
 
     ShadowMemory *memory = getShadowMemory(addrSpace, workItem, workGroup);
-    memory->store(SM.data, address, SM.size*SM.num);
+    memory->store(inter, address);
 }
 
 // TODO : store floats
@@ -2192,7 +2187,7 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
                     // Global pointer kernel arguments
                     // value.second.data == ptr
                     // value.second.size == ptr size
-                    shadowValues->setValue(value.first, ShadowContext::getUninitializedValue(type));
+                    shadowValues->setValue(value.first, ShadowContext::getUninitializedInterval());
                     break;
                 }
                 case AddrSpaceLocal:
@@ -2200,7 +2195,7 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
                     // Local pointer kernel arguments
                     // value.second.data == NULL
                     // value.second.size == val size
-                    shadowValues->setValue(value.first, ShadowContext::getUninitializedValue(value.first));
+                    shadowValues->setValue(value.first, ShadowContext::getUninitializedInterval());
                     break;
                 }
                 case AddrSpacePrivate:
@@ -2213,9 +2208,9 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
                         // value.second.data == val
                         // value.second.size == val size
                         size_t address = workItem->getOperand(value.first).getPointer();
-                        TypedValue uninitializedValue = ShadowContext::getUninitializedValue(value.second.size);
-                        allocAndStoreShadowMemory(AddrSpacePrivate, address, uninitializedValue, workItem);
-                        shadowValues->setValue(value.first, ShadowContext::getUninitializedValue(value.first));
+                        allocAndStoreShadowMemory(AddrSpacePrivate, address,
+                        			ShadowContext::getUninitializedInterval(), workItem);
+                        shadowValues->setValue(value.first, ShadowContext::getUninitializedInterval());
                     }
                     else
                     {
@@ -2223,8 +2218,8 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
                         // value.second.data == NULL
                         // value.second.size == val size
                         size_t address = workItem->getOperand(value.first).getPointer();
-                        TypedValue cleanValue = ShadowContext::getUninitializedValue(value.second.size);
-                        allocAndStoreShadowMemory(AddrSpacePrivate, address, cleanValue, workItem);
+                        allocAndStoreShadowMemory(AddrSpacePrivate, address,
+                        		ShadowContext::getUninitializedInterval(), workItem);
                     }
                     break;
                 }
@@ -2235,7 +2230,7 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
             // Non pointer type kernel arguments
             // value->second.data == val
             // value->second.size == val size
-            shadowValues->setValue(value.first, ShadowContext::getUninitializedValue(value.first));
+            shadowValues->setValue(value.first, ShadowContext::getUninitializedInterval());
         }
     }
 }
@@ -2259,20 +2254,20 @@ void FloatTest::workGroupBegin(const WorkGroup *workGroup)
         // value->second.data == NULL
         // value->second.size == val size
         size_t address = workGroup->getLocalMemoryAddress(value.first);
-        TypedValue v;
+        Interval* v;
 
         if(llvm::isa<llvm::Argument>(value.first))
         {
             //TODO: Local memory clean or poisoned? May need to differentiate
             //      between kernel argument (?) and variable (poisoned)
             //v = ShadowContext::getPoisonedValue(value.second.size);
-            v = ShadowContext::getUninitializedValue(value.second.size);
+            v = ShadowContext::getUninitializedInterval();
 
         }
         else
         {
             //v = ShadowContext::getPoisonedValue(value.second.size);
-            v = ShadowContext::getUninitializedValue(value.second.size);
+            v = ShadowContext::getUninitializedInterval();
 
         }
 
@@ -2287,7 +2282,7 @@ void FloatTest::workGroupComplete(const WorkGroup *workGroup)
 }
 
 ShadowFrame::ShadowFrame() :
-    m_values(new UnorderedTypedValueMap())
+    m_values(new UnorderedIntervalMap())
 {
 #ifdef DUMP_SHADOW
     m_valuesList = new ValuesList();
@@ -2328,7 +2323,7 @@ void ShadowFrame::dump() const
     cout << "=======================" << endl;
 }
 
-TypedValue ShadowFrame::getValue(const llvm::Value *V) const
+Interval* ShadowFrame::getValue(const llvm::Value *V) const
 {
     if (llvm::isa<llvm::Instruction>(V)) {
         // For instructions the shadow is already stored in the map.
@@ -2337,7 +2332,7 @@ TypedValue ShadowFrame::getValue(const llvm::Value *V) const
     }
     else if (llvm::isa<llvm::UndefValue>(V)) {
     	// TODO : don't know if this case is handled correctly
-        return ShadowContext::getUninitializedValue(V);
+        return ShadowContext::getUninitializedInterval();
     }
     else if (llvm::isa<llvm::Argument>(V)) {
         // For arguments the shadow is already stored in the map.
@@ -2346,26 +2341,16 @@ TypedValue ShadowFrame::getValue(const llvm::Value *V) const
     }
     else if(const llvm::ConstantVector *VC = llvm::dyn_cast<llvm::ConstantVector>(V))
     {
-        TypedValue vecShadow = ShadowContext::getUninitializedValue(V);
-        TypedValue elemShadow;
-
-        for(unsigned i = 0; i < vecShadow.num; ++i)
-        {
-            elemShadow = getValue(VC->getAggregateElement(i));
-            size_t offset = i*vecShadow.size;
-            memcpy(vecShadow.data + offset, elemShadow.data, vecShadow.size);
-        }
-
-        return vecShadow;
+        //TODO : handle vectors
     }
     else
     {
         // For everything else the shadow is zero.
-        //return ShadowContext::getCleanValue(V);
+        return ShadowContext::getUninitializedInterval();
     }
 }
 
-void ShadowFrame::setValue(const llvm::Value *V, TypedValue SV)
+void ShadowFrame::setValue(const llvm::Value *V, Interval* inter)
 {
 #ifdef DUMP_SHADOW
     if(!m_values->count(V))
@@ -2377,7 +2362,7 @@ void ShadowFrame::setValue(const llvm::Value *V, TypedValue SV)
         cout << "Shadow for value " << V->getName().str() << " reset!" << endl;
     }
 #endif
-    (*m_values)[V] = SV;
+    (*m_values)[V] = inter;
 }
 
 ShadowValues::ShadowValues() :
@@ -2435,7 +2420,7 @@ ShadowMemory::~ShadowMemory()
     clear();
 }
 
-void ShadowMemory::allocate(size_t address, size_t size)
+void ShadowMemory::allocate(size_t address)
 {
     size_t index = extractBuffer(address);
 
@@ -2444,12 +2429,16 @@ void ShadowMemory::allocate(size_t address, size_t size)
         deallocate(address);
     }
 
+    /*
     Buffer *buffer = new Buffer();
     buffer->size   = size;
     buffer->flags  = 0;
     buffer->data   = new unsigned char[size];
+	*/
 
-    m_map[index] = buffer;
+    Interval *inter = new Interval(-INF, INF);
+
+    m_map[index] = inter;
 }
 
 void ShadowMemory::clear()
@@ -2457,26 +2446,27 @@ void ShadowMemory::clear()
     MemoryMap::iterator mItr;
     for(mItr = m_map.begin(); mItr != m_map.end(); ++mItr)
     {
-        delete[] mItr->second->data;
+        //delete[] mItr->second->data;
         delete mItr->second;
     }
 }
 
 void ShadowMemory::deallocate(size_t address)
 {
-    size_t index = extractBuffer(address);
+    //size_t index = extractBuffer(address);
 
-    assert(m_map.count(index) && "Cannot deallocate non existing memory!");
+    assert(m_map.count(address) && "Cannot deallocate non existing memory!");
 
-    delete[] m_map.at(index)->data;
-    delete m_map.at(index);
-    m_map.at(index) = NULL;
+    delete m_map.at(address);
+    m_map.at(address) = NULL;
 }
 
 void ShadowMemory::dump() const
 {
     cout << "====== ShadowMem (" << getAddressSpaceName(m_addrSpace) << ") ======";
 
+    // TODO : rewrite this for intervals
+    /*
     for(unsigned b = 0, o = 1; b < m_map.size(); o++)
     {
         if(!m_map.count(b+o))
@@ -2499,6 +2489,7 @@ void ShadowMemory::dump() const
         ++b;
         o = 0;
     }
+    */
     cout << endl;
 
     cout << "=======================" << endl;
@@ -2516,34 +2507,36 @@ size_t ShadowMemory::extractOffset(size_t address) const
 
 void* ShadowMemory::getPointer(size_t address) const
 {
-    size_t index = extractBuffer(address);
-    size_t offset= extractOffset(address);
+    //size_t index = extractBuffer(address);
+    //size_t offset= extractOffset(address);
 
-    assert(m_map.count(index) && "No shadow memory found!");
+    assert(m_map.count(address) && "No shadow memory found!");
 
-    return m_map.at(index)->data + offset;
+    return m_map.at(address);
 }
 
-bool ShadowMemory::isAddressValid(size_t address, size_t size) const
+bool ShadowMemory::isAddressValid(size_t address) const
 {
-    size_t index = extractBuffer(address);
-    size_t offset = extractOffset(address);
-    return m_map.count(index) && (offset + size <= m_map.at(index)->size);
+    //size_t index = extractBuffer(address);
+    //size_t offset = extractOffset(address);
+    return m_map.count(address);
 }
 
-void ShadowMemory::load(unsigned char *dst, size_t address, size_t size) const
+Interval* ShadowMemory::load(size_t address) const
 {
-    size_t index = extractBuffer(address);
-    size_t offset = extractOffset(address);
+    //size_t index = extractBuffer(address);
+    //size_t offset = extractOffset(address);
 
-    if(isAddressValid(address, size))
+    if(isAddressValid(address))
     {
-        assert(m_map.count(index) && "No shadow memory found!");
-        memcpy(dst, m_map.at(index)->data + offset, size);
+        assert(m_map.count(address) && "No shadow memory found!");
+        //memcpy(dst, m_map.at(index)->data + offset, size);
+        return m_map.at(address);
     }
     else
     {
     	cout << "poisoned load" << endl;
+    	assert(false && "couldn't find interval at this address");
         //TypedValue v = ShadowContext::getPoisonedValue(size);
        // memcpy(dst, v.data, size);
     }
@@ -2555,15 +2548,16 @@ void ShadowMemory::lock(size_t address) const
     ATOMIC_MUTEX(offset).lock();
 }
 
-void ShadowMemory::store(const unsigned char *src, size_t address, size_t size)
+void ShadowMemory::store(/*const unsigned char *src*/ Interval* inter, size_t address)
 {
-    size_t index = extractBuffer(address);
-    size_t offset = extractOffset(address);
+    //size_t index = extractBuffer(address);
+    //size_t offset = extractOffset(address);
 
-    if(isAddressValid(address, size))
+    if(isAddressValid(address))
     {
-        assert(m_map.count(index) && "Cannot store to unallocated memory!");
-        memcpy(m_map.at(index)->data + offset, src, size);
+        assert(m_map.count(address) && "Cannot store to unallocated memory!");
+        //memcpy(m_map.at(index)->data + offset, src, size);
+        m_map.at(address) = inter;
     }
 }
 
@@ -2680,7 +2674,7 @@ void ShadowContext::dumpGlobalValues() const
 {
     cout << "==== ShadowMap (global) =======" << endl;
 
-    UnorderedTypedValueMap::const_iterator itr;
+    UnorderedIntervalMap::const_iterator itr;
     unsigned num = 1;
 
     for(itr = m_globalValues.begin(); itr != m_globalValues.end(); ++itr)
@@ -2759,134 +2753,26 @@ TypedValue ShadowContext::getCleanValue(const llvm::Value *V)
 */
 
 //for float_test
-TypedValue ShadowContext::getUninitializedValue(const llvm::Value *V)
-{
-    pair<unsigned,unsigned> size = getValueSize(V);
-    TypedValue v = {
-        size.first,
-        size.second,
-        m_workSpace.memoryPool->alloc(size.first*size.second)
-    };
 
-    //memset(v.data, 0, v.size*v.num);
 
-    return v;
+Interval* ShadowContext::getIntervalFromFloat(float f){
+
+	Interval* inter = new Interval(f);
+
+	return inter;
 }
 
-TypedValue ShadowContext::getValueFromFloat(float f){
 
-	TypedValue v = {
-		sizeof(float),
-		1,
-		m_workSpace.memoryPool->alloc(sizeof(float))
-	};
-
-	*((float*)(v.data)) = f;
-
-	return v;
-}
-
-/*
-TypedValue ShadowContext::getCleanValue(const llvm::Type *Ty)
-{
-    unsigned size = getTypeSize(Ty);
-    TypedValue v = {
-        size,
-        1,
-        m_workSpace.memoryPool->alloc(size)
-    };
-
-    memset(v.data, 0, v.size);
-
-    return v;
-}
-*/
 
 // for float_test
-TypedValue ShadowContext::getUninitializedValue(const llvm::Type *Ty)
+Interval* ShadowContext::getUninitializedInterval()
 {
-    unsigned size = getTypeSize(Ty);
-    TypedValue v = {
-        size,
-        1,
-        m_workSpace.memoryPool->alloc(size)
-    };
+    Interval* inter = new Interval(-INF, INF);
 
-    //memset(v.data, 0, v.size);
-
-    return v;
+    return inter;
 }
 
-TypedValue ShadowContext::getUninitializedValue(unsigned size)
-{
-    TypedValue v = {
-        size,
-        1,
-        m_workSpace.memoryPool->alloc(size)
-    };
-
-    //memset(v.data, -1, size);
-
-    return v;
-}
-
-/*
-TypedValue ShadowContext::getPoisonedValue(unsigned size)
-{
-    TypedValue v = {
-        size,
-        1,
-        m_workSpace.memoryPool->alloc(size)
-    };
-
-    memset(v.data, -1, size);
-
-    return v;
-}
-
-TypedValue ShadowContext::getPoisonedValue(TypedValue v)
-{
-    TypedValue p = {
-        v.size,
-        v.num,
-        m_workSpace.memoryPool->alloc(v.size*v.num)
-    };
-
-    memset(p.data, -1, v.size*v.num);
-
-    return p;
-}
-
-TypedValue ShadowContext::getPoisonedValue(const llvm::Value *V)
-{
-    pair<unsigned,unsigned> size = getValueSize(V);
-    TypedValue v = {
-        size.first,
-        size.second,
-        m_workSpace.memoryPool->alloc(size.first*size.second)
-    };
-
-    memset(v.data, -1, v.size*v.num);
-
-    return v;
-}
-
-TypedValue ShadowContext::getPoisonedValue(const llvm::Type *Ty)
-{
-    unsigned size = getTypeSize(Ty);
-    TypedValue v = {
-        size,
-        1,
-        m_workSpace.memoryPool->alloc(size)
-    };
-
-    memset(v.data, -1, v.size);
-
-    return v;
-}
-*/
-
-TypedValue ShadowContext::getValue(const WorkItem *workItem, const llvm::Value *V) const
+Interval* ShadowContext::getValue(const WorkItem *workItem, const llvm::Value *V) const
 {
     if(m_globalValues.count(V))
     {
@@ -2899,70 +2785,9 @@ TypedValue ShadowContext::getValue(const WorkItem *workItem, const llvm::Value *
     }
 }
 
-/*
-bool ShadowContext::isCleanStruct(ShadowMemory *shadowMemory, size_t address, const llvm::StructType *structTy)
-{
-    if(structTy->isPacked())
-    {
-        unsigned size = getTypeSize(structTy);
-        TypedValue v = {
-            size,
-            1,
-            m_workSpace.memoryPool->alloc(size)
-        };
 
-        shadowMemory->load(v.data, address, size);
-
-        return isCleanValue(v);
-    }
-    else
-    {
-        for(unsigned i = 0; i < structTy->getStructNumElements(); ++i)
-        {
-            size_t offset = getStructMemberOffset(structTy, i);
-            unsigned size = getTypeSize(structTy->getElementType(i));
-
-            if(const llvm::StructType *elemTy = llvm::dyn_cast<llvm::StructType>(structTy->getElementType(i)))
-            {
-                if(!isCleanStruct(shadowMemory, address + offset, elemTy))
-                {
-                    return false;
-                }
-            }
-            else
-            {
-                TypedValue v = {
-                    size,
-                    1,
-                    m_workSpace.memoryPool->alloc(size)
-                };
-
-                shadowMemory->load(v.data, address + offset, size);
-
-                if(!isCleanValue(v))
-                {
-                    return false;
-                }
-            }
-        }
-
-        return true;
-    }
-}
-
-bool ShadowContext::isCleanValue(TypedValue v)
-{
-    return (ShadowContext::getCleanValue(v) == v);
-}
-
-bool ShadowContext::isCleanValue(TypedValue v, unsigned offset)
-{
-    TypedValue c = ShadowContext::getCleanValue(v.size);
-    return !memcmp(v.data + offset*v.size, c.data, v.size);
-}
-*/
-void ShadowContext::setGlobalValue(const llvm::Value *V, TypedValue SV)
+void ShadowContext::setGlobalValue(const llvm::Value *V, Interval* inter)
 {
     assert(!m_globalValues.count(V) && "Values may only have one shadow");
-    m_globalValues[V] = SV;
+    m_globalValues[V] = inter;
 }

@@ -11,6 +11,8 @@
 #include "core/Plugin.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include <boost/numeric/interval.hpp>
+#include <limits>
 
 //#define DUMP_SHADOW
 //#define PARANOID_CHECK(W, I) assert(checkAllOperandsDefined(W, I) && "Not all operands defined")
@@ -19,7 +21,9 @@
 
 namespace oclgrind
 {
-    typedef std::unordered_map<const llvm::Value*, TypedValue> UnorderedTypedValueMap;
+	typedef boost::numeric::interval<float> Interval;
+    typedef std::unordered_map<const llvm::Value*, Interval*> UnorderedIntervalMap;
+    const float INF = std::numeric_limits<float>::infinity();
 
     class ShadowFrame
     {
@@ -32,7 +36,7 @@ namespace oclgrind
             {
                 return m_call;
             }
-            TypedValue getValue(const llvm::Value *V) const;
+            Interval* getValue(const llvm::Value *V) const;
             inline bool hasValue(const llvm::Value* V) const
             {
                 return llvm::isa<llvm::Constant>(V) || m_values->count(V);
@@ -41,13 +45,13 @@ namespace oclgrind
             {
                 m_call = CI;
             }
-            void setValue(const llvm::Value *V, TypedValue SV);
+            void setValue(const llvm::Value *V, Interval* inter);
 
         private:
             typedef std::list<const llvm::Value*> ValuesList;
 
             const llvm::CallInst *m_call;
-            UnorderedTypedValueMap *m_values;
+            UnorderedIntervalMap *m_values;
 #ifdef DUMP_SHADOW
             ValuesList *m_valuesList;
 #endif
@@ -68,7 +72,7 @@ namespace oclgrind
             {
                 return m_stack->top()->getCall();
             }
-            inline TypedValue getValue(const llvm::Value *V) const
+            inline Interval* getValue(const llvm::Value *V) const
             {
                 return m_stack->top()->getValue(V);
             }
@@ -88,9 +92,9 @@ namespace oclgrind
             {
                 m_stack->top()->setCall(CI);
             }
-            inline void setValue(const llvm::Value *V, TypedValue SV)
+            inline void setValue(const llvm::Value *V, Interval* inter)
             {
-                m_stack->top()->setValue(V, SV);
+                m_stack->top()->setValue(V, inter);
             }
 
         private:
@@ -102,27 +106,32 @@ namespace oclgrind
     class ShadowMemory
     {
         public:
+    	/*
             struct Buffer
             {
                 size_t size;
                 cl_mem_flags flags;
                 unsigned char *data;
             };
+		*/
+
 
             ShadowMemory(AddressSpace addrSpace, unsigned bufferBits);
             virtual ~ShadowMemory();
 
-            void allocate(size_t address, size_t size);
+            void allocate(size_t address);
             void dump() const;
             void* getPointer(size_t address) const;
-            bool isAddressValid(size_t address, size_t size=1) const;
-            void load(unsigned char *dst, size_t address, size_t size=1) const;
+            bool isAddressValid(size_t address) const;
+            Interval* load(size_t address) const;
             void lock(size_t address) const;
-            void store(const unsigned char *src, size_t address, size_t size=1);
+            void store(Interval *inter, size_t address);
             void unlock(size_t address) const;
 
         private:
-            typedef std::unordered_map<size_t, Buffer*> MemoryMap;
+
+
+            typedef std::unordered_map<size_t, Interval* /*Buffer**/> MemoryMap;
 
             AddressSpace m_addrSpace;
             MemoryMap m_map;
@@ -199,17 +208,11 @@ namespace oclgrind
             void freeWorkGroups();
 
             //for float test
-            static TypedValue getUninitializedValue(const llvm::Value *V);
-            static TypedValue getUninitializedValue(const llvm::Type *Ty);
-            static TypedValue getUninitializedValue(unsigned size);
-            static TypedValue getValueFromFloat(float f);
+            static Interval* getUninitializedInterval();
+            static Interval* getIntervalFromFloat(float f);
 
-            /*
-            static TypedValue getCleanValue(unsigned size);
-            static TypedValue getCleanValue(TypedValue v);
-            static TypedValue getCleanValue(const llvm::Type *Ty);
-            static TypedValue getCleanValue(const llvm::Value *V);
-            */
+
+
             inline ShadowMemory* getGlobalMemory() const
             {
                 return m_globalMemory;
@@ -219,12 +222,7 @@ namespace oclgrind
             {
                 return m_workSpace.memoryPool;
             }
-            /*
-            static TypedValue getPoisonedValue(unsigned size);
-            static TypedValue getPoisonedValue(TypedValue v);
-            static TypedValue getPoisonedValue(const llvm::Type *Ty);
-            static TypedValue getPoisonedValue(const llvm::Value *V);
-            */
+
             inline ShadowWorkItem* getShadowWorkItem(const WorkItem *workItem) const
             {
                 return m_workSpace.workItems->at(workItem);
@@ -233,7 +231,7 @@ namespace oclgrind
             {
                 return m_workSpace.workGroups->at(workGroup);
             }
-            TypedValue getValue(const WorkItem *workItem, const llvm::Value *V) const;
+            Interval* getValue(const WorkItem *workItem, const llvm::Value *V) const;
             inline bool hasValue(const WorkItem *workItem, const llvm::Value* V) const
             {
                 return llvm::isa<llvm::Constant>(V) || m_globalValues.count(V) || m_workSpace.workItems->at(workItem)->getValues()->hasValue(V);
@@ -243,11 +241,11 @@ namespace oclgrind
             static bool isCleanValue(TypedValue v);
             static bool isCleanValue(TypedValue v, unsigned offset);
             */
-            void setGlobalValue(const llvm::Value *V, TypedValue SV);
+            void setGlobalValue(const llvm::Value *V, Interval* inter);
 
         private:
             ShadowMemory *m_globalMemory;
-            UnorderedTypedValueMap m_globalValues;
+            UnorderedIntervalMap m_globalValues;
             unsigned m_numBitsBuffer;
             typedef std::map<const WorkItem*, ShadowWorkItem*> ShadowItemMap;
             typedef std::map<const WorkGroup*, ShadowWorkGroup*> ShadowGroupMap;
@@ -289,22 +287,22 @@ namespace oclgrind
             ShadowContext shadowContext;
             MemoryPool m_pool;
 
-            void allocAndStoreShadowMemory(unsigned addrSpace, size_t address, TypedValue SM,
+            void allocAndStoreShadowMemory(unsigned addrSpace, size_t address, Interval* inter,
                                            const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL, bool unchecked = false);
             //bool checkAllOperandsDefined(const WorkItem *workItem, const llvm::Instruction *I);
             void checkStructMemcpy(const WorkItem *workItem, const llvm::Value *src);
-            void copyShadowMemory(unsigned dstAddrSpace, size_t dst,
-                                  unsigned srcAddrSpace, size_t src, unsigned size,
-                                  const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL, bool unchecked = false);
-            void copyShadowMemoryStrided(unsigned dstAddrSpace, size_t dst,
-                                         unsigned srcAddrSpace, size_t src,
-                                         size_t num, size_t stride, unsigned size,
-                                         const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL, bool unchecked = false);
+            //void copyShadowMemory(unsigned dstAddrSpace, size_t dst,
+            //                      unsigned srcAddrSpace, size_t src, unsigned size,
+            //                      const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL, bool unchecked = false);
+            //void copyShadowMemoryStrided(unsigned dstAddrSpace, size_t dst,
+            //                            unsigned srcAddrSpace, size_t src,
+            //                             size_t num, size_t stride, unsigned size,
+            //                             const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL, bool unchecked = false);
             static std::string extractUnmangledName(const std::string fullname);
             ShadowMemory* getShadowMemory(unsigned addrSpace, const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL) const;
             bool handleBuiltinFunction(const WorkItem *workItem, std::string name, const llvm::CallInst *CI, const TypedValue result);
             //void handleIntrinsicInstruction(const WorkItem *workItem, const llvm::IntrinsicInst *I);
-            void loadShadowMemory(unsigned addrSpace, size_t address, TypedValue &SM,
+            Interval* loadShadowMemory(unsigned addrSpace, size_t address,
                                   const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL);
             void logUninitializedAddress(unsigned int addrSpace, size_t address, bool write = true) const;
             void logUninitializedCF() const;
@@ -313,8 +311,8 @@ namespace oclgrind
             //void SimpleOr(const WorkItem *workItem, const llvm::Instruction *I);
             void simpleFloatInstruction(const WorkItem *workItem, const llvm::Instruction *instruction);
             void handleCmpInstruction(const WorkItem *workItem, const llvm::Instruction *instruction, const TypedValue& result);
-            void SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *CI);
-            void storeShadowMemory(unsigned addrSpace, size_t address, TypedValue SM,
+            //void SimpleOrAtomic(const WorkItem *workItem, const llvm::CallInst *CI);
+            void storeShadowMemory(unsigned addrSpace, size_t address, Interval* inter,
                                    const WorkItem *workItem = NULL, const WorkGroup *workGroup = NULL, bool unchecked = false);
     };
 }
