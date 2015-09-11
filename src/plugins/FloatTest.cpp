@@ -964,12 +964,15 @@ void FloatTest::hostMemoryStore(const Memory *memory,
                              size_t address, size_t size,
                              const uint8_t *storeData)
 {
+	// TODO : handle hostMemoryStore
+	/*
     if(memory->getAddressSpace() == AddrSpaceGlobal)
     {
     	//TODO : handle floats here
         //TypedValue v = ShadowContext::getCleanValue(size);
         //allocAndStoreShadowMemory(AddrSpaceGlobal, address, v);
     }
+    */
 }
 
 // handles FAdd, FSub, FMul, FDiv
@@ -1003,6 +1006,7 @@ void FloatTest::simpleFloatInstruction(const WorkItem *workItem, const llvm::Ins
 	}
 
 	cout << "result = " << res.lower() << " " << res.upper() << endl;
+	cout << "res casted to int : " << (int)res.lower() << " " << (int)res.upper() << endl;
 
 	Interval* shadowVal = new Interval(res);
 	shadowValues->setValue(instruction, shadowVal);
@@ -2363,6 +2367,11 @@ Interval* ShadowFrame::getValue(const llvm::Value *V) const
     else if(const llvm::ConstantVector *VC = llvm::dyn_cast<llvm::ConstantVector>(V))
     {
         //TODO : handle vectors
+    }
+    else if(const llvm::ConstantFP *C = llvm::dyn_cast<llvm::ConstantFP>(V)){
+    	const llvm::APFloat ap = C->getValueAPF();
+    	float floatVal = C->getValueAPF().convertToFloat();
+    	return ShadowContext::getIntervalFromFloat(floatVal);
     }
     else
     {
