@@ -209,7 +209,10 @@ namespace oclgrind
 
             //for float test
             static Interval* getUninitializedInterval();
+            static Interval* getUninitializedInterval(int n);
             static Interval* getIntervalFromFloat(float f);
+            static Interval* getIntervalsFromDataVector(const llvm::ConstantDataVector* vec);
+
             static int64_t intervalToInt(Interval* inter);
             static bool isnan(Interval inter);
 
