@@ -983,38 +983,49 @@ void FloatTest::hostMemoryStore(const Memory *memory,
 // handles FAdd, FSub, FMul, FDiv
 void FloatTest::simpleFloatInstruction(const WorkItem *workItem, const llvm::Instruction *instruction){
 
+	llvm::Type* type = instruction->getType();
 	llvm::Value* lhs = instruction->getOperand(0);
 	llvm::Value* rhs = instruction->getOperand(1);
 
 	ShadowValues *shadowValues = shadowContext.getShadowWorkItem(workItem)->getValues();
 
-	Interval lhsVal = *(shadowValues->getValue(lhs));
-	Interval rhsVal = *(shadowValues->getValue(rhs));
+	Interval* lhsVal = shadowValues->getValue(lhs);
+	Interval* rhsVal = shadowValues->getValue(rhs);
 
-	Interval res;
-	switch(instruction->getOpcode()){
-	case llvm::Instruction::FAdd:
-		res = lhsVal + rhsVal;
-		break;
-	case llvm::Instruction::Sub:
-		res = lhsVal - rhsVal;
-		break;
-	case llvm::Instruction::FMul:
-		res = lhsVal * rhsVal;
-		break;
-	case llvm::Instruction::FDiv:
-		res = lhsVal / rhsVal;
-		break;
-	default:
-		assert(false && "unsupported instruction");
-		break;
+	int n = 1;
+	if(type->isVectorTy()){
+		n = type->getVectorNumElements();
 	}
 
-	if(debug) {cout << "result = " << res.lower() << " " << res.upper() << endl;}
-	if(debug) {cout << "res casted to int : " << (int)res.lower() << " " << (int)res.upper() << endl;}
+	Interval* shadowVal = new Interval[n];
 
-	Interval* shadowVal = new Interval[1];
-	shadowVal[0] = res;
+	for(int i=0; i<n; i++){
+		switch(instruction->getOpcode()){
+		case llvm::Instruction::FAdd:
+			shadowVal[i] = lhsVal[i] + rhsVal[i];
+			break;
+		case llvm::Instruction::Sub:
+			shadowVal[i] = lhsVal[i] - rhsVal[i];
+			break;
+		case llvm::Instruction::FMul:
+			shadowVal[i] = lhsVal[i] * rhsVal[i];
+			break;
+		case llvm::Instruction::FDiv:
+			shadowVal[i] = lhsVal[i] / rhsVal[i];
+			break;
+		default:
+			assert(false && "unsupported instruction");
+			break;
+		}
+	}
+
+
+	if(debug){
+		for(int i=0; i<n; i++){
+			cout << "result" << i << " = " << shadowVal[i].lower() << " " << shadowVal[i].upper() << endl;
+		}
+	}
+
 	shadowValues->setValue(instruction, shadowVal);
 
 }
