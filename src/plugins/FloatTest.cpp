@@ -46,7 +46,7 @@ static std::mutex atomicShadowMutex[NUM_ATOMIC_MUTEXES];
 #define ATOMIC_MUTEX(offset) \
   atomicShadowMutex[(((offset)>>2) & (NUM_ATOMIC_MUTEXES-1))]
 
-THREAD_LOCAL ShadowContext::WorkSpace ShadowContext::m_workSpace = {NULL, NULL, NULL, 0};
+THREAD_LOCAL ShadowContext::WorkSpace ShadowContext::m_workSpace = {NULL, NULL, /*NULL,*/ 0};
 
 const bool debug = true;
 
@@ -2228,7 +2228,7 @@ void FloatTest::storeShadowMemory(unsigned addrSpace, size_t address, Interval* 
 void FloatTest::workItemBegin(const WorkItem *workItem)
 {
 	//TODO : memory pool not needed anymore, remove it
-    shadowContext.createMemoryPool();
+    //shadowContext.createMemoryPool();
     shadowContext.allocateWorkItems();
     ShadowWorkItem *shadowWI = shadowContext.createShadowWorkItem(workItem);
     ShadowValues *shadowValues = shadowWI->getValues();
@@ -2300,17 +2300,15 @@ void FloatTest::workItemBegin(const WorkItem *workItem)
 
 void FloatTest::workItemComplete(const WorkItem *workItem)
 {
-	if(debug) cout << "work item comp" << endl;
     shadowContext.destroyShadowWorkItem(workItem);
     shadowContext.freeWorkItems();
-    if(debug) cout << "ok" << endl;
 
     //shadowContext.destroyMemoryPool();
 }
 
 void FloatTest::workGroupBegin(const WorkGroup *workGroup)
 {
-    shadowContext.createMemoryPool();
+    //shadowContext.createMemoryPool();
     shadowContext.allocateWorkGroups();
     shadowContext.createShadowWorkGroup(workGroup);
 
@@ -2343,10 +2341,8 @@ void FloatTest::workGroupBegin(const WorkGroup *workGroup)
 
 void FloatTest::workGroupComplete(const WorkGroup *workGroup)
 {
-	if(debug) cout << "work group comp" << endl;
     shadowContext.destroyShadowWorkGroup(workGroup);
     shadowContext.freeWorkGroups();
-    if(debug) cout << "ok" << endl;
 }
 
 ShadowFrame::ShadowFrame() :
@@ -2481,10 +2477,8 @@ ShadowWorkItem::ShadowWorkItem(unsigned bufferBits) :
 
 ShadowWorkItem::~ShadowWorkItem()
 {
-	if(debug) cout << "work item dest" << endl;
     delete m_memory;
     delete m_values;
-    if(debug) cout << "ok" << endl;
 }
 
 ShadowWorkGroup::ShadowWorkGroup(unsigned bufferBits) :
@@ -2495,9 +2489,7 @@ ShadowWorkGroup::ShadowWorkGroup(unsigned bufferBits) :
 
 ShadowWorkGroup::~ShadowWorkGroup()
 {
-	if(debug) cout << "work group dest" << endl;
     delete m_memory;
-    if(debug) cout << "ok" << endl;
 }
 
 ShadowMemory::ShadowMemory(AddressSpace addrSpace, unsigned bufferBits) :
@@ -2676,16 +2668,6 @@ void ShadowContext::allocateWorkGroups()
     }
 }
 
-void ShadowContext::createMemoryPool()
-{
-    if(m_workSpace.poolUsers == 0)
-    {
-        m_workSpace.memoryPool = new MemoryPool();
-    }
-
-    ++m_workSpace.poolUsers;
-}
-
 ShadowWorkItem* ShadowContext::createShadowWorkItem(const WorkItem *workItem)
 {
     assert(!m_workSpace.workItems->count(workItem) && "Workitems may only have one shadow");
@@ -2702,15 +2684,6 @@ ShadowWorkGroup* ShadowContext::createShadowWorkGroup(const WorkGroup *workGroup
     return sWG;
 }
 
-void ShadowContext::destroyMemoryPool()
-{
-    --m_workSpace.poolUsers;
-
-    if(m_workSpace.poolUsers == 0)
-    {
-        delete m_workSpace.memoryPool;
-    }
-}
 
 void ShadowContext::destroyShadowWorkItem(const WorkItem *workItem)
 {

@@ -106,16 +106,6 @@ namespace oclgrind
     class ShadowMemory
     {
         public:
-    	/*
-            struct Buffer
-            {
-                size_t size;
-                cl_mem_flags flags;
-                unsigned char *data;
-            };
-		*/
-
-
             ShadowMemory(AddressSpace addrSpace, unsigned bufferBits);
             virtual ~ShadowMemory();
 
@@ -196,10 +186,8 @@ namespace oclgrind
 
             void allocateWorkItems();
             void allocateWorkGroups();
-            void createMemoryPool();
             ShadowWorkItem* createShadowWorkItem(const WorkItem *workItem);
             ShadowWorkGroup* createShadowWorkGroup(const WorkGroup *workGroup);
-            void destroyMemoryPool();
             void destroyShadowWorkItem(const WorkItem *workItem);
             void destroyShadowWorkGroup(const WorkGroup *workGroup);
             void dump(const WorkItem *workItem) const;
@@ -222,10 +210,6 @@ namespace oclgrind
                 return m_globalMemory;
             }
             TypedValue getGlobalValue(const llvm::Value *V) const;
-            MemoryPool* getMemoryPool() const
-            {
-                return m_workSpace.memoryPool;
-            }
 
             inline ShadowWorkItem* getShadowWorkItem(const WorkItem *workItem) const
             {
@@ -240,11 +224,7 @@ namespace oclgrind
             {
                 return llvm::isa<llvm::Constant>(V) || m_globalValues.count(V) || m_workSpace.workItems->at(workItem)->getValues()->hasValue(V);
             }
-            /*
-            static bool isCleanStruct(ShadowMemory *shadowMemory, size_t address, const llvm::StructType *structTy);
-            static bool isCleanValue(TypedValue v);
-            static bool isCleanValue(TypedValue v, unsigned offset);
-            */
+
             void setGlobalValue(const llvm::Value *V, Interval* inter);
 
         private:
@@ -257,7 +237,6 @@ namespace oclgrind
             {
                 ShadowItemMap *workItems;
                 ShadowGroupMap *workGroups;
-                MemoryPool *memoryPool;
                 unsigned poolUsers;
             };
             static THREAD_LOCAL WorkSpace m_workSpace;
