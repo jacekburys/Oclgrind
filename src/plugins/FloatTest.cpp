@@ -1498,7 +1498,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
             unsigned index = workItem->getOperand(extractInst->getIndexOperand()).getUInt();
 
-            Interval* newShadow = (vectorShadow+index);//ShadowContext::getIntervalFromFloat(result.getFloat(0));
+            Interval* newShadow = ShadowContext::copyInterval(vectorShadow+index);//ShadowContext::getIntervalFromFloat(result.getFloat(0));
             if(debug) cout << newShadow->lower() << " "	 << newShadow->upper() << endl;
 
             shadowValues->setValue(instruction, newShadow);
@@ -2792,6 +2792,12 @@ Interval* ShadowContext::getIntervalsFromDataVector(const llvm::ConstantDataVect
 	return inter;
 }
 
+
+Interval* ShadowContext::copyInterval(Interval* inter){
+	Interval* res = new Interval[1];
+	res[0] = Interval(inter->lower(), inter->upper());
+	return res;
+}
 
 int64_t ShadowContext::intervalToInt(Interval* inter){
 	int64_t l = inter->lower();
