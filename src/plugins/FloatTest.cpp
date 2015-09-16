@@ -1517,6 +1517,89 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             break;
         }
 
+        case llvm::Instruction::InsertElement:
+        {
+
+        	llvm::Type* type = instruction->getType();
+        	if(!(type->isVectorTy() && type->getVectorElementType()->isFloatTy())) break;
+
+        	if(debug) cout << "got insert element" << endl;
+
+        	unsigned index = workItem->getOperand(instruction->getOperand(2)).getUInt();
+        	if(debug) cout << index << endl;
+
+        	Interval* vectorShadow;
+        	//element has to be float
+        	Interval* elementShadow = shadowContext.getValue(workItem, instruction->getOperand(1));
+        	Interval* newShadow;
+
+        	if(const llvm::UndefValue* undef = llvm::dyn_cast<const llvm::UndefValue>(instruction->getOperand(0))){
+        		// is undef
+        		if(debug) cout << "operand 0 is undef" << endl;
+        		newShadow = ShadowContext::getUninitializedInterval(type->getVectorNumElements());
+        	}else{
+        		vectorShadow = shadowContext.getValue(workItem, instruction->getOperand(0));
+        		newShadow = ShadowContext::copyInterval(vectorShadow, type->getVectorNumElements());
+        	}
+        	*(newShadow+index) = Interval(*elementShadow);
+            shadowValues->setValue(instruction, newShadow);
+
+            break;
+        }
+
+        case llvm::Instruction::ShuffleVector:
+        {
+        	llvm::Type* type = instruction->getType();
+
+            if(!(type->isVectorTy() && type->getVectorElementType()->isFloatTy())) break;
+
+            if(debug) cout << "got shuffle vector" << endl;
+            const llvm::ShuffleVectorInst *shuffleInst = (const llvm::ShuffleVectorInst*)instruction;
+
+            /*
+            const llvm::Value *v1 = shuffleInst->getOperand(0);
+            const llvm::Value *v2 = shuffleInst->getOperand(1);
+            TypedValue mask = workItem->getOperand(shuffleInst->getMask());
+            TypedValue maskShadow = shadowContext.getValue(workItem, shuffleInst->getMask());
+            TypedValue newShadow = shadowContext.getMemoryPool()->clone(result);
+            TypedValue pv = ShadowContext::getPoisonedValue(newShadow.size);
+
+            for(unsigned i = 0; i < newShadow.num; i++)
+            {
+                if(shuffleInst->getMask()->getAggregateElement(i)->getValueID() == llvm::Value::UndefValueVal)
+                {
+                    // Don't care / undef
+                    continue;
+                }
+
+                const llvm::Value *src = v1;
+                unsigned int index = mask.getUInt(i);
+                if(index >= newShadow.num)
+                {
+                    index -= newShadow.num;
+                    src = v2;
+                }
+
+                if(!ShadowContext::isCleanValue(maskShadow, i))
+                {
+                    memcpy(newShadow.data + i*newShadow.size, pv.data, newShadow.size);
+                }
+                else
+                {
+                    TypedValue v = shadowContext.getValue(workItem, src);
+                    size_t srcOffset = index*newShadow.size;
+                    memcpy(newShadow.data + i*newShadow.size, v.data + srcOffset, newShadow.size);
+                }
+            }
+
+            shadowValues->setValue(instruction, newShadow);
+            */
+            break;
+        }
+
+
+
+
 		/////////////////////////
 
 /*
@@ -1625,26 +1708,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             SimpleOr(workItem, instruction);
             break;
         }
-        case llvm::Instruction::InsertElement:
-        {
-            TypedValue indexShadow = shadowContext.getValue(workItem, instruction->getOperand(2));
 
-            if(!ShadowContext::isCleanValue(indexShadow))
-            {
-                logUninitializedIndex();
-            }
-
-            TypedValue vectorShadow = shadowContext.getValue(workItem, instruction->getOperand(0));
-            TypedValue elementShadow = shadowContext.getValue(workItem, instruction->getOperand(1));
-            TypedValue newShadow = shadowContext.getMemoryPool()->clone(result);
-
-            unsigned index = workItem->getOperand(instruction->getOperand(2)).getUInt();
-            memcpy(newShadow.data, vectorShadow.data, newShadow.size*newShadow.num);
-            memcpy(newShadow.data + index*newShadow.size, elementShadow.data, newShadow.size);
-
-            shadowValues->setValue(instruction, newShadow);
-            break;
-        }
         case llvm::Instruction::InsertValue:
         {
             const llvm::InsertValueInst *insertInst = (const llvm::InsertValueInst*)instruction;
@@ -1840,47 +1904,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
             break;
         }
-        case llvm::Instruction::ShuffleVector:
-        {
-            const llvm::ShuffleVectorInst *shuffleInst = (const llvm::ShuffleVectorInst*)instruction;
-            const llvm::Value *v1 = shuffleInst->getOperand(0);
-            const llvm::Value *v2 = shuffleInst->getOperand(1);
-            TypedValue mask = workItem->getOperand(shuffleInst->getMask());
-            TypedValue maskShadow = shadowContext.getValue(workItem, shuffleInst->getMask());
-            TypedValue newShadow = shadowContext.getMemoryPool()->clone(result);
-            TypedValue pv = ShadowContext::getPoisonedValue(newShadow.size);
 
-            for(unsigned i = 0; i < newShadow.num; i++)
-            {
-                if(shuffleInst->getMask()->getAggregateElement(i)->getValueID() == llvm::Value::UndefValueVal)
-                {
-                    // Don't care / undef
-                    continue;
-                }
-
-                const llvm::Value *src = v1;
-                unsigned int index = mask.getUInt(i);
-                if(index >= newShadow.num)
-                {
-                    index -= newShadow.num;
-                    src = v2;
-                }
-
-                if(!ShadowContext::isCleanValue(maskShadow, i))
-                {
-                    memcpy(newShadow.data + i*newShadow.size, pv.data, newShadow.size);
-                }
-                else
-                {
-                    TypedValue v = shadowContext.getValue(workItem, src);
-                    size_t srcOffset = index*newShadow.size;
-                    memcpy(newShadow.data + i*newShadow.size, v.data + srcOffset, newShadow.size);
-                }
-            }
-
-            shadowValues->setValue(instruction, newShadow);
-            break;
-        }
 
         case llvm::Instruction::SRem:
         {
@@ -2812,10 +2836,17 @@ Interval* ShadowContext::getIntervalsFromDataVector(const llvm::ConstantDataVect
 
 
 Interval* ShadowContext::copyInterval(Interval* inter){
-	Interval* res = new Interval[1];
-	res[0] = Interval(inter->lower(), inter->upper());
+	return ShadowContext::copyInterval(inter, 1);
+}
+
+Interval* ShadowContext::copyInterval(Interval* inter, int n){
+	Interval* res = new Interval[n];
+	for(int i=0; i<n; i++){
+		res[i] = Interval((inter+i)->lower(), (inter+i)->upper());
+	}
 	return res;
 }
+
 
 int64_t ShadowContext::intervalToInt(Interval* inter){
 	int64_t l = inter->lower();

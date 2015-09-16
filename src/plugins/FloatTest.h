@@ -201,6 +201,7 @@ namespace oclgrind
             static Interval* getIntervalFromFloat(float f);
             static Interval* getIntervalsFromDataVector(const llvm::ConstantDataVector* vec);
             static Interval* copyInterval(Interval* inter);
+            static Interval* copyInterval(Interval* inter, int n);
 
             static int64_t intervalToInt(Interval* inter);
             static bool isnan(Interval inter);
