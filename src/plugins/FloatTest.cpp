@@ -1192,7 +1192,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 					shadowValues->setValue(Addr, shadowVal);
 				}else{
 					if(debug) cout << "not a constant data vector" << endl;
-					Interval* shadowVal = shadowContext.getValue(workItem, Val);
+					Interval* shadowVal = ShadowContext::copyInterval(shadowContext.getValue(workItem, Val));
 					storeShadowMemory(addrSpace, address, shadowVal, workItem);
 					shadowValues->setValue(Addr, shadowVal);
 				}
@@ -2232,6 +2232,7 @@ void FloatTest::storeShadowMemory(unsigned addrSpace, size_t address, Interval* 
     }
 
     ShadowMemory *memory = getShadowMemory(addrSpace, workItem, workGroup);
+
     memory->store(inter, address);
 }
 
@@ -2532,20 +2533,22 @@ void ShadowMemory::clear()
     MemoryMap::iterator mItr;
 
     // ugly
+    /*
     while(!m_map.empty()){
     	mItr = m_map.begin();
     	delete[] (mItr->second);
     	m_map.erase(mItr);
     }
+    */
 
-    /*
+
     for(mItr = m_map.begin(); mItr != m_map.end(); ++mItr)
     {
     	cout << mItr->second << endl;
         delete[] (mItr->second);
-        m_map.erase(mItr);
+        //m_map.erase(mItr);
     }
-    */
+
     if(debug) cout << "after clear" << endl;
 }
 
@@ -2640,6 +2643,10 @@ void ShadowMemory::store(/*const unsigned char *src*/ Interval* inter, size_t ad
     if(isAddressValid(address))
     {
         assert(m_map.count(address) && "Cannot store to unallocated memory!");
+        for(auto it = m_map.begin(); it != m_map.end(); ++it) {
+            assert((inter != it->second) && "Cannot map multiple addresses to the same interval!");
+        }
+
         //memcpy(m_map.at(index)->data + offset, src, size);
         m_map.at(address) = inter;
     }
