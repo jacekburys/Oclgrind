@@ -1000,6 +1000,8 @@ void FloatTest::simpleFloatInstruction(const WorkItem *workItem, const llvm::Ins
 	Interval* shadowVal = new Interval[n];
 
 	for(int i=0; i<n; i++){
+		if(debug) cout << "[" << lhsVal[i].lower() << "," << lhsVal[i].upper() << "] and [" <<
+				rhsVal[i].lower() << "," << rhsVal[i].upper() << "]" << endl;
 		switch(instruction->getOpcode()){
 		case llvm::Instruction::FAdd:
 			shadowVal[i] = lhsVal[i] + rhsVal[i];
@@ -1192,7 +1194,8 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 					shadowValues->setValue(Addr, shadowVal);
 				}else{
 					if(debug) cout << "not a constant data vector" << endl;
-					Interval* shadowVal = ShadowContext::copyInterval(shadowContext.getValue(workItem, Val));
+					Interval* shadowVal =
+							ShadowContext::copyInterval(shadowContext.getValue(workItem, Val), type->getVectorNumElements());
 					storeShadowMemory(addrSpace, address, shadowVal, workItem);
 					shadowValues->setValue(Addr, shadowVal);
 				}
@@ -1556,44 +1559,49 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             if(debug) cout << "got shuffle vector" << endl;
             const llvm::ShuffleVectorInst *shuffleInst = (const llvm::ShuffleVectorInst*)instruction;
 
-            /*
+
             const llvm::Value *v1 = shuffleInst->getOperand(0);
             const llvm::Value *v2 = shuffleInst->getOperand(1);
+            int num1 = v1->getType()->getVectorNumElements();
+            int num2 = v1->getType()->getVectorNumElements();
             TypedValue mask = workItem->getOperand(shuffleInst->getMask());
-            TypedValue maskShadow = shadowContext.getValue(workItem, shuffleInst->getMask());
-            TypedValue newShadow = shadowContext.getMemoryPool()->clone(result);
-            TypedValue pv = ShadowContext::getPoisonedValue(newShadow.size);
 
-            for(unsigned i = 0; i < newShadow.num; i++)
+            Interval* vec1;
+            Interval* vec2;
+
+            if(const llvm::UndefValue* undef1 = llvm::dyn_cast<const llvm::UndefValue>(v1)){
+				// is undef
+				if(debug) cout << "operand 0 is undef" << endl;
+				vec1 = ShadowContext::getUninitializedInterval(type->getVectorNumElements());
+			}else{
+				vec1 = shadowContext.getValue(workItem, v1);
+			}
+
+            if(const llvm::UndefValue* undef2 = llvm::dyn_cast<const llvm::UndefValue>(v2)){
+				// is undef
+				if(debug) cout << "operand 1 is undef" << endl;
+				vec2 = ShadowContext::getUninitializedInterval(type->getVectorNumElements());
+			}else{
+				vec2 = shadowContext.getValue(workItem, v2);
+			}
+
+            Interval* newShadow = new Interval[mask.num];
+
+            for(unsigned i = 0; i < mask.num; i++)
             {
-                if(shuffleInst->getMask()->getAggregateElement(i)->getValueID() == llvm::Value::UndefValueVal)
-                {
-                    // Don't care / undef
-                    continue;
-                }
-
-                const llvm::Value *src = v1;
-                unsigned int index = mask.getUInt(i);
-                if(index >= newShadow.num)
-                {
-                    index -= newShadow.num;
-                    src = v2;
-                }
-
-                if(!ShadowContext::isCleanValue(maskShadow, i))
-                {
-                    memcpy(newShadow.data + i*newShadow.size, pv.data, newShadow.size);
-                }
-                else
-                {
-                    TypedValue v = shadowContext.getValue(workItem, src);
-                    size_t srcOffset = index*newShadow.size;
-                    memcpy(newShadow.data + i*newShadow.size, v.data + srcOffset, newShadow.size);
-                }
+            	int index = mask.getSInt(i);
+            	if(debug) cout << "index = " << index << endl;
+            	if(index<num1){
+            		newShadow[i] = vec1[index];
+            	}else{
+            		index -= num1;
+            		newShadow[i] = vec2[index];
+            	}
+            	if(debug) cout << newShadow[i].lower() << " " << newShadow[i].upper() << endl;
             }
 
             shadowValues->setValue(instruction, newShadow);
-            */
+
             break;
         }
 
