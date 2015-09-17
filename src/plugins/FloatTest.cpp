@@ -849,6 +849,7 @@ bool FloatTest::handleBuiltinFunction(const WorkItem *workItem, string name,
 void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm::IntrinsicInst *I)
 {
 
+	if(debug) cout << "got instrinsic" << endl;
 	ShadowWorkItem *shadowWorkItem = shadowContext.getShadowWorkItem(workItem);
 	ShadowValues *shadowValues = shadowWorkItem->getValues();
 
@@ -1148,6 +1149,9 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 			const llvm::AllocaInst *allocaInst = ((const llvm::AllocaInst*)instruction);
 			const llvm::Type* type = allocaInst->getAllocatedType();
+
+			if( debug && type->isStructTy()) cout << "got struct" << endl;
+
 			if(!(type->isFloatTy() || (type->isVectorTy() && type->getVectorElementType()->isFloatTy()))) break;
 
 			size_t address = result.getPointer();
@@ -1179,10 +1183,13 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 			size_t address = workItem->getOperand(Addr).getPointer();
 			unsigned addrSpace = storeInst->getPointerAddressSpace();
 
+			if(debug) cout << "address : " << address << endl;
+
 			if(type->isFloatTy()){
 
 				if(const llvm::ConstantFP *fp = llvm::dyn_cast<const llvm::ConstantFP>(Val)){
 					//Val is a constant
+					if(debug) cout << "got float constant" << endl;
 
 					const llvm::APFloat ap = fp->getValueAPF();
 					float floatVal = fp->getValueAPF().convertToFloat();
@@ -1192,7 +1199,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 					shadowValues->setValue(Addr, shadowVal);
 
 				}else{
-					Interval* shadowVal = shadowContext.getValue(workItem, Val);
+					Interval* shadowVal = ShadowContext::copyInterval(shadowContext.getValue(workItem, Val));
 					storeShadowMemory(addrSpace, address, shadowVal, workItem);
 					shadowValues->setValue(Addr, shadowVal);
 				}
@@ -1225,6 +1232,8 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
             size_t address = workItem->getOperand(Addr).getPointer();
             unsigned addrSpace = loadInst->getPointerAddressSpace();
+
+            if(debug) cout << "address : " << address << endl;
 
 			Interval* v = loadShadowMemory(addrSpace, address, workItem);
 			if(debug) cout << "load : " << v->lower() << " " << v->upper() << endl;
@@ -1386,6 +1395,9 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
         case llvm::Instruction::Call:
         {
+
+        	if(debug) cout << "got call" << endl;
+
             const llvm::CallInst *callInst = ((const llvm::CallInst*)instruction);
             const llvm::Function *function = callInst->getCalledFunction();
 
@@ -1615,7 +1627,34 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             break;
         }
 
+        case llvm::Instruction::GetElementPtr:
+        {
+        	llvm::Type* type = instruction->getType();
+            const llvm::GetElementPtrInst* getElemInst = ((const llvm::GetElementPtrInst*) instruction);
 
+            if(getElemInst->getType()->isPointerTy()) cout << "got pointer"	<< endl;
+            if(getElemInst->getType()->getPointerElementType()->isFloatTy()) cout << "got float pointer" << endl;
+
+            size_t address = result.getPointer();
+			if(debug) cout << "address : " << address << endl;
+
+			int n = 1;
+
+			if(type->isVectorTy()){
+				n = type->getVectorNumElements();
+				if(debug) cout << "num : " << n << endl;
+			}
+
+
+			shadowValues->setValue(instruction, ShadowContext::getUninitializedInterval(n));
+
+			if(!getShadowMemory(AddrSpacePrivate, workItem, NULL)->isAddressValid(address)){
+				Interval* v = ShadowContext::getUninitializedInterval(n);
+				allocAndStoreShadowMemory(AddrSpacePrivate, address, v, workItem);
+			}
+
+            break;
+        }
 
 
 		/////////////////////////
@@ -1716,11 +1755,7 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
 
 
-        case llvm::Instruction::GetElementPtr:
-        {
-            SimpleOr(workItem, instruction);
-            break;
-        }
+
         case llvm::Instruction::ICmp:
         {
             SimpleOr(workItem, instruction);
@@ -2665,9 +2700,7 @@ Interval* ShadowMemory::load(size_t address) const
     }
     else
     {
-    	cout << "poisoned load" << endl;
     	assert(false && "couldn't find interval at this address");
-
     }
 }
 
@@ -2677,10 +2710,8 @@ void ShadowMemory::lock(size_t address) const
     ATOMIC_MUTEX(offset).lock();
 }
 
-void ShadowMemory::store(/*const unsigned char *src*/ Interval* inter, size_t address)
+void ShadowMemory::store(Interval* inter, size_t address)
 {
-    //size_t index = extractBuffer(address);
-    //size_t offset = extractOffset(address);
 
     if(isAddressValid(address))
     {
@@ -2689,8 +2720,10 @@ void ShadowMemory::store(/*const unsigned char *src*/ Interval* inter, size_t ad
             assert((inter != it->second) && "Cannot map multiple addresses to the same interval!");
         }
 
-        //memcpy(m_map.at(index)->data + offset, src, size);
         m_map.at(address) = inter;
+        if(debug) cout << "stored at : " << address << endl;
+    }else{
+    	assert(false && "invalid address");
     }
 }
 
