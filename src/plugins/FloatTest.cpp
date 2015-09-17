@@ -1049,67 +1049,77 @@ void FloatTest::handleCmpInstruction(const WorkItem *workItem, const llvm::Instr
 
     ShadowValues *shadowValues = shadowContext.getShadowWorkItem(workItem)->getValues();
 
-    Interval lhsVal = *(shadowValues->getValue(lhs));
-    Interval rhsVal = *(shadowValues->getValue(rhs));
+    Interval* lhsVal = shadowValues->getValue(lhs);
+    Interval* rhsVal = shadowValues->getValue(rhs);
 
-    if(debug) cout << "lhs : " << lhsVal.lower() << " " << lhsVal.upper() << endl;
-    if(debug) cout << "rhs : " << rhsVal.lower() << " " << rhsVal.upper() << endl;
+    int num = 1;
+    if(instruction->getType()->isVectorTy()){
+    	num = instruction->getType()->getVectorNumElements();
+    }
 
-    bool actual = result.getSInt();
+    for(int i = 0; i<num; i++){
 
-	switch(predicate){
-	case llvm::FCmpInst::Predicate::FCMP_FALSE:///< 0 0 0 0    Always false (always folded)
-		assert(actual == false && "FCMP_FALSE");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_OEQ:  ///< 0 0 0 1    True if ordered and equal
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal == rhsVal) == actual && "FCMP_OEQ");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_OGT:  ///< 0 0 1 0    True if ordered and greater than
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal > rhsVal) == actual && "FCMP_OGT");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_OGE:  ///< 0 0 1 1    True if ordered and greater than or equal
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal >= rhsVal) == actual && "FCMP_OGE");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_OLT:  ///< 0 1 0 0    True if ordered and less than
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal < rhsVal) == actual && "FCMP_OLT");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_OLE:  ///< 0 1 0 1    True if ordered and less than or equal
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal <= rhsVal) == actual && "FCMP_OLE");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_ONE:  ///< 0 1 1 0    True if ordered and operands are unequal
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && (lhsVal != rhsVal) == actual && "FCMP_ONE");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_ORD:  ///< 0 1 1 1    True if ordered (no nans)
-		assert(!isnan(lhsVal) && !isnan(lhsVal) && "FCMP_ORD");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_UNO:  ///< 1 0 0 0    True if unordered: isnan(X) | isnan(Y)
-		assert(isnan(lhsVal) || isnan(rhsVal));
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_UEQ:  ///< 1 0 0 1    True if unordered or equal
-		assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal == rhsVal) == actual && "FCMP_UEQ");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_UGT:  ///< 1 0 1 0    True if unordered or greater than
-		assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal > rhsVal) == actual && "FCMP_UGT");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_UGE:  ///< 1 0 1 1    True if unordered, greater than, or equal
-		assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal >= rhsVal) == actual && "FCMP_UGE");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_ULT:  ///< 1 1 0 0    True if unordered or less than
-		assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal < rhsVal) == actual && "FCMP_ULT");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_ULE:  ///< 1 1 0 1    True if unordered, less than, or equal
-		assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal <= rhsVal) == actual && "FCMP_ULE");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_UNE:  ///< 1 1 1 0    True if unordered or not equal
-		assert((isnan(lhsVal) || isnan(rhsVal) || lhsVal != rhsVal) == actual && "FCMP_UNE");
-		break;
-	case llvm::FCmpInst::Predicate::FCMP_TRUE: ///< 1 1 1 1    Always true (always folded)
-		assert(actual == true && "FCMP_TRUE");
-		break;
-	default:
-		assert(false && "unsupported predicate");
-		break;
-	}
+    	bool actual = result.getSInt(i);
+
+        if(debug) cout << "lhs : " << lhsVal[i].lower() << " " << lhsVal[i].upper()
+        		<< ", rhs : " << rhsVal[i].lower() << " " << rhsVal[i].upper() << endl << "actual = " << actual << endl;
+
+    	switch(predicate){
+    	case llvm::FCmpInst::Predicate::FCMP_FALSE:///< 0 0 0 0    Always false (always folded)
+    		assert(actual == false && "FCMP_FALSE");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_OEQ:  ///< 0 0 0 1    True if ordered and equal
+    		assert(!isnan(lhsVal[i]) && !isnan(lhsVal[i]) && (lhsVal[i] == rhsVal[i]) == actual && "FCMP_OEQ");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_OGT:  ///< 0 0 1 0    True if ordered and greater than
+    		assert(!isnan(lhsVal[i]) && !isnan(lhsVal[i]) && (lhsVal[i] > rhsVal[i]) == actual && "FCMP_OGT");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_OGE:  ///< 0 0 1 1    True if ordered and greater than or equal
+    		assert(!isnan(lhsVal[i]) && !isnan(lhsVal[i]) && (lhsVal[i] >= rhsVal[i]) == actual && "FCMP_OGE");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_OLT:  ///< 0 1 0 0    True if ordered and less than
+    		assert(!isnan(lhsVal[i]) && !isnan(lhsVal[i]) && (lhsVal[i] < rhsVal[i]) == actual && "FCMP_OLT");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_OLE:  ///< 0 1 0 1    True if ordered and less than or equal
+    		assert(!isnan(lhsVal[i]) && !isnan(lhsVal[i]) && (lhsVal[i] <= rhsVal[i]) == actual && "FCMP_OLE");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_ONE:  ///< 0 1 1 0    True if ordered and operands are unequal
+    		assert(!isnan(lhsVal[i]) && !isnan(lhsVal[i]) && (lhsVal[i] != rhsVal[i]) == actual && "FCMP_ONE");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_ORD:  ///< 0 1 1 1    True if ordered (no nans)
+    		assert(!isnan(lhsVal[i]) && !isnan(lhsVal[i]) && "FCMP_ORD");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_UNO:  ///< 1 0 0 0    True if unordered: isnan(X) | isnan(Y)
+    		assert(isnan(lhsVal[i]) || isnan(rhsVal[i]));
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_UEQ:  ///< 1 0 0 1    True if unordered or equal
+    		assert((isnan(lhsVal[i]) || isnan(rhsVal[i]) || lhsVal[i] == rhsVal[i]) == actual && "FCMP_UEQ");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_UGT:  ///< 1 0 1 0    True if unordered or greater than
+    		assert((isnan(lhsVal[i]) || isnan(rhsVal[i]) || lhsVal[i] > rhsVal[i]) == actual && "FCMP_UGT");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_UGE:  ///< 1 0 1 1    True if unordered, greater than, or equal
+    		assert((isnan(lhsVal[i]) || isnan(rhsVal[i]) || lhsVal[i] >= rhsVal[i]) == actual && "FCMP_UGE");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_ULT:  ///< 1 1 0 0    True if unordered or less than
+    		assert((isnan(lhsVal[i]) || isnan(rhsVal[i]) || lhsVal[i] < rhsVal[i]) == actual && "FCMP_ULT");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_ULE:  ///< 1 1 0 1    True if unordered, less than, or equal
+    		assert((isnan(lhsVal[i]) || isnan(rhsVal[i]) || lhsVal[i] <= rhsVal[i]) == actual && "FCMP_ULE");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_UNE:  ///< 1 1 1 0    True if unordered or not equal
+    		assert((isnan(lhsVal[i]) || isnan(rhsVal[i]) || lhsVal[i] != rhsVal[i]) == actual && "FCMP_UNE");
+    		break;
+    	case llvm::FCmpInst::Predicate::FCMP_TRUE: ///< 1 1 1 1    Always true (always folded)
+    		assert(actual == true && "FCMP_TRUE");
+    		break;
+    	default:
+    		assert(false && "unsupported predicate");
+    		break;
+    	}
+    }
+
+
 	if(debug) cout << "comparison ok" << endl;
 }
 
