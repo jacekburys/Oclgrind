@@ -53,13 +53,11 @@ const bool debug = true;
 FloatTest::FloatTest(const Context *context)
  : Plugin(context), shadowContext(sizeof(size_t)==8 ? 32 : 16)
 {
-    //shadowContext.createMemoryPool();
 }
 
 FloatTest::~FloatTest()
 {
 	cout << "destructor" << endl;
-    //shadowContext.destroyMemoryPool();
 }
 
 void FloatTest::allocAndStoreShadowMemory(unsigned addrSpace, size_t address, Interval* inter,
@@ -77,31 +75,6 @@ void FloatTest::allocAndStoreShadowMemory(unsigned addrSpace, size_t address, In
     storeShadowMemory(addrSpace, address, inter, workItem, workGroup, unchecked);
 }
 
-// this won't be used
-/*
-bool FloatTest::checkAllOperandsDefined(const WorkItem *workItem, const llvm::Instruction *I)
-{
-    for(llvm::Instruction::const_op_iterator OI = I->op_begin(); OI != I->op_end(); ++OI)
-    {
-
-        if(!ShadowContext::isCleanValue(shadowContext.getValue(workItem, OI->get())))
-        {
-#ifdef DUMP_SHADOW
-            OI->get()->dump();
-            cout << "Shadow value: " << shadowContext.getValue(workItem, OI->get()) << endl;
-#endif
-            logUninitializedCF();
-#ifdef DUMP_SHADOW
-            shadowContext.dump(workItem);
-#endif
-            return false;
-        }
-
-    }
-
-    return true;
-}
-*/
 
 void FloatTest::checkStructMemcpy(const WorkItem *workItem, const llvm::Value *src)
 {
@@ -134,12 +107,6 @@ void FloatTest::checkStructMemcpy(const WorkItem *workItem, const llvm::Value *s
             FATAL_ERROR("Unsupported addressspace %d", srcAddrSpace);
     }
 
-    /*
-    if(!ShadowContext::isCleanStruct(shadowMemory, srcAddr, structTy))
-    {
-        logUninitializedWrite(srcAddrSpace, srcAddr);
-    }
-    */
 }
 
 //not used
@@ -876,9 +843,11 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
             break;
         }
         // TODO : handle memcpy and memset
-        /*
+
         case llvm::Intrinsic::memcpy:
         {
+        	if(debug) cout << "got memcpy" << endl;
+        	/*
             const llvm::MemCpyInst *memcpyInst = (const llvm::MemCpyInst*)I;
             const llvm::Value *dstOp = memcpyInst->getDest();
             const llvm::Value *srcOp = memcpyInst->getSource();
@@ -899,26 +868,16 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
             // Check shadow of src address
             TypedValue srcShadow = shadowContext.getValue(workItem, srcOp);
 
-
-            //if(!ShadowContext::isCleanValue(srcShadow))
-            //{
-            //    logUninitializedAddress(srcAddrSpace, src, false);
-            //}
-
-
             // Check shadow of dst address
             TypedValue dstShadow = shadowContext.getValue(workItem, dstOp);
 
-
-            //if(!ShadowContext::isCleanValue(dstShadow))
-            //{
-            //    logUninitializedAddress(dstAddrSpace, dst);
-            //}
-
+			*/
             break;
         }
+
         case llvm::Intrinsic::memset:
         {
+        	/*
             const llvm::MemSetInst *memsetInst = (const llvm::MemSetInst*)I;
             const llvm::Value *Addr = memsetInst->getDest();
             size_t dst = workItem->getOperand(Addr).getPointer();
@@ -939,15 +898,11 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
             // Check shadow of address
             TypedValue addrShadow = shadowContext.getValue(workItem, Addr);
 
-
-            //if(!ShadowContext::isCleanValue(addrShadow))
-            //{
-            //    logUninitializedAddress(addrSpace, dst);
-            //}
+			*/
 
             break;
         }
-        */
+
         case llvm::Intrinsic::dbg_declare:
             //Do nothing
             break;
@@ -1150,25 +1105,28 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 			const llvm::AllocaInst *allocaInst = ((const llvm::AllocaInst*)instruction);
 			const llvm::Type* type = allocaInst->getAllocatedType();
 
-			if( debug && type->isStructTy()) cout << "got struct" << endl;
-
-			if(!(type->isFloatTy() || (type->isVectorTy() && type->getVectorElementType()->isFloatTy()))) break;
-
 			size_t address = result.getPointer();
 			if(debug) cout << "address : " << address << endl;
 
-			int n = 1;
-
-			if(type->isVectorTy()){
-				n = type->getVectorNumElements();
-				if(debug) cout << "num : " << n << endl;
+			if(type->isFloatTy() || (type->isVectorTy() && type->getVectorElementType()->isFloatTy())){
+				int n = 1;
+				if(type->isVectorTy()){
+					n = type->getVectorNumElements();
+					if(debug) cout << "num : " << n << endl;
+				}
+				shadowValues->setValue(instruction, ShadowContext::getUninitializedInterval(n));
+				Interval* v = ShadowContext::getUninitializedInterval(n);
+				allocAndStoreShadowMemory(AddrSpacePrivate, address, v, workItem);
+			}
+			else if(type->isArrayTy() && type->getArrayElementType()->isFloatTy()){
+				if(debug) cout << "got float array" << endl;
+				int n = type->getArrayNumElements();
+				shadowValues->setValue(instruction, ShadowContext::getUninitializedInterval(n));
+				Interval* v = ShadowContext::getUninitializedInterval(n);
+				allocAndStoreShadowMemory(AddrSpacePrivate, address, v, workItem);
 			}
 
 
-			shadowValues->setValue(instruction, ShadowContext::getUninitializedInterval(n));
-
-			Interval* v = ShadowContext::getUninitializedInterval(n);
-			allocAndStoreShadowMemory(AddrSpacePrivate, address, v, workItem);
 			break;
 		}
 
