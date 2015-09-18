@@ -48,7 +48,7 @@ static std::mutex atomicShadowMutex[NUM_ATOMIC_MUTEXES];
 
 THREAD_LOCAL ShadowContext::WorkSpace ShadowContext::m_workSpace = {NULL, NULL, /*NULL,*/ 0};
 
-const bool debug = true;
+#define DEBUG
 
 FloatTest::FloatTest(const Context *context)
  : Plugin(context), shadowContext(sizeof(size_t)==8 ? 32 : 16)
@@ -816,7 +816,9 @@ bool FloatTest::handleBuiltinFunction(const WorkItem *workItem, string name,
 void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm::IntrinsicInst *I)
 {
 
-	if(debug) cout << "got instrinsic" << endl;
+#ifdef DEBUG
+	cout << "got instrinsic" << endl;
+#endif
 	ShadowWorkItem *shadowWorkItem = shadowContext.getShadowWorkItem(workItem);
 	ShadowValues *shadowValues = shadowWorkItem->getValues();
 
@@ -846,7 +848,9 @@ void FloatTest::handleIntrinsicInstruction(const WorkItem *workItem, const llvm:
 
         case llvm::Intrinsic::memcpy:
         {
-        	if(debug) cout << "got memcpy" << endl;
+#ifdef DEBUG
+        	cout << "got memcpy" << endl;
+#endif
         	/*
             const llvm::MemCpyInst *memcpyInst = (const llvm::MemCpyInst*)I;
             const llvm::Value *dstOp = memcpyInst->getDest();
@@ -956,8 +960,10 @@ void FloatTest::simpleFloatInstruction(const WorkItem *workItem, const llvm::Ins
 	Interval* shadowVal = new Interval[n];
 
 	for(int i=0; i<n; i++){
-		if(debug) cout << "[" << lhsVal[i].lower() << "," << lhsVal[i].upper() << "] and [" <<
+#ifdef DEBUG
+		cout << "[" << lhsVal[i].lower() << "," << lhsVal[i].upper() << "] and [" <<
 				rhsVal[i].lower() << "," << rhsVal[i].upper() << "]" << endl;
+#endif
 		switch(instruction->getOpcode()){
 		case llvm::Instruction::FAdd:
 			shadowVal[i] = lhsVal[i] + rhsVal[i];
@@ -978,11 +984,11 @@ void FloatTest::simpleFloatInstruction(const WorkItem *workItem, const llvm::Ins
 	}
 
 
-	if(debug){
+#ifdef DEBUG
 		for(int i=0; i<n; i++){
 			cout << "result" << i << " = " << shadowVal[i].lower() << " " << shadowVal[i].upper() << endl;
 		}
-	}
+#endif
 
 	shadowValues->setValue(instruction, shadowVal);
 
@@ -1017,9 +1023,10 @@ void FloatTest::handleCmpInstruction(const WorkItem *workItem, const llvm::Instr
 
     	bool actual = result.getSInt(i);
 
-        if(debug) cout << "lhs : " << lhsVal[i].lower() << " " << lhsVal[i].upper()
+#ifdef DEBUG
+         cout << "lhs : " << lhsVal[i].lower() << " " << lhsVal[i].upper()
         		<< ", rhs : " << rhsVal[i].lower() << " " << rhsVal[i].upper() << endl << "actual = " << actual << endl;
-
+#endif
     	switch(predicate){
     	case llvm::FCmpInst::Predicate::FCMP_FALSE:///< 0 0 0 0    Always false (always folded)
     		assert(actual == false && "FCMP_FALSE");
@@ -1075,8 +1082,9 @@ void FloatTest::handleCmpInstruction(const WorkItem *workItem, const llvm::Instr
     	}
     }
 
-
-	if(debug) cout << "comparison ok" << endl;
+#ifdef DEBUG
+	cout << "comparison ok" << endl;
+#endif
 }
 
 
@@ -1100,26 +1108,34 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
     	// FOR FLOAT TEST
     	case llvm::Instruction::Alloca:
 		{
-			if(debug) cout << "got alloca" << endl;
+#ifdef DEBUG
+			cout << "got alloca" << endl;
+#endif
 
 			const llvm::AllocaInst *allocaInst = ((const llvm::AllocaInst*)instruction);
 			const llvm::Type* type = allocaInst->getAllocatedType();
 
 			size_t address = result.getPointer();
-			if(debug) cout << "address : " << address << endl;
+#ifdef DEBUG
+			cout << "address : " << address << endl;
+#endif
 
 			if(type->isFloatTy() || (type->isVectorTy() && type->getVectorElementType()->isFloatTy())){
 				int n = 1;
 				if(type->isVectorTy()){
 					n = type->getVectorNumElements();
-					if(debug) cout << "num : " << n << endl;
+#ifdef DEBUG
+					cout << "num : " << n << endl;
+#endif
 				}
 				shadowValues->setValue(instruction, ShadowContext::getUninitializedInterval(n));
 				Interval* v = ShadowContext::getUninitializedInterval(n);
 				allocAndStoreShadowMemory(AddrSpacePrivate, address, v, workItem);
 			}
 			else if(type->isArrayTy() && type->getArrayElementType()->isFloatTy()){
-				if(debug) cout << "got float array" << endl;
+#ifdef DEBUG
+				cout << "got float array" << endl;
+#endif
 				int n = type->getArrayNumElements();
 				shadowValues->setValue(instruction, ShadowContext::getUninitializedInterval(n));
 				Interval* v = ShadowContext::getUninitializedInterval(n);
@@ -1141,13 +1157,17 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 			size_t address = workItem->getOperand(Addr).getPointer();
 			unsigned addrSpace = storeInst->getPointerAddressSpace();
 
-			if(debug) cout << "address : " << address << endl;
+#ifdef DEBUG
+			cout << "address : " << address << endl;
+#endif
 
 			if(type->isFloatTy()){
 
 				if(const llvm::ConstantFP *fp = llvm::dyn_cast<const llvm::ConstantFP>(Val)){
 					//Val is a constant
-					if(debug) cout << "got float constant" << endl;
+#ifdef DEBUG
+					cout << "got float constant" << endl;
+#endif
 
 					const llvm::APFloat ap = fp->getValueAPF();
 					float floatVal = fp->getValueAPF().convertToFloat();
@@ -1163,12 +1183,16 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 				}
 			}else if(type->isVectorTy() && type->getVectorElementType()->isFloatTy()){
 				if(const llvm::ConstantDataVector* vec = llvm::dyn_cast<const llvm::ConstantDataVector>(Val)){
-					if(debug) cout << "got constant data vector" << endl;
+#ifdef DEBUG
+					cout << "got constant data vector" << endl;
+#endif
 					Interval* shadowVal = ShadowContext::getIntervalsFromDataVector(vec);
 					storeShadowMemory(addrSpace, address, shadowVal, workItem);
 					shadowValues->setValue(Addr, shadowVal);
 				}else{
-					if(debug) cout << "not a constant data vector" << endl;
+#ifdef DEBUG
+					cout << "not a constant data vector" << endl;
+#endif
 					Interval* shadowVal =
 							ShadowContext::copyInterval(shadowContext.getValue(workItem, Val), type->getVectorNumElements());
 					storeShadowMemory(addrSpace, address, shadowVal, workItem);
@@ -1191,10 +1215,14 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             size_t address = workItem->getOperand(Addr).getPointer();
             unsigned addrSpace = loadInst->getPointerAddressSpace();
 
-            if(debug) cout << "address : " << address << endl;
+#ifdef DEBUG
+            cout << "address : " << address << endl;
+#endif
 
 			Interval* v = loadShadowMemory(addrSpace, address, workItem);
-			if(debug) cout << "load : " << v->lower() << " " << v->upper() << endl;
+#ifdef DEBUG
+			cout << "load : " << v->lower() << " " << v->upper() << endl;
+#endif
 
 			shadowValues->setValue(instruction, v);
 			break;
@@ -1231,7 +1259,9 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         	//take the result of cast and store value
         	const llvm::SIToFPInst* castInst = ((const llvm::SIToFPInst*) instruction);
         	if(!castInst->getDestTy()->isFloatTy()) break;
-        	if(debug) {cout << "got cast to float" << endl;}
+#ifdef DEBUG
+        	cout << "got cast to float" << endl;
+#endif
 
         	Interval* v = ShadowContext::getIntervalFromFloat(result.getFloat(0));
         	shadowValues->setValue(instruction, v);
@@ -1353,8 +1383,9 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
         case llvm::Instruction::Call:
         {
-
-        	if(debug) cout << "got call" << endl;
+#ifdef DEBUG
+        	cout << "got call" << endl;
+#endif
 
             const llvm::CallInst *callInst = ((const llvm::CallInst*)instruction);
             const llvm::Function *function = callInst->getCalledFunction();
@@ -1481,7 +1512,9 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         	const llvm::Type* type = instruction->getType();
         	if(!type->isFloatTy()) break;
 
-        	if(debug) cout << "got extract element" << endl;
+#ifdef DEBUG
+        	cout << "got extract element" << endl;
+#endif
 
             const llvm::ExtractElementInst *extractInst = ((const llvm::ExtractElementInst*)instruction);
 
@@ -1493,7 +1526,9 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             unsigned index = workItem->getOperand(extractInst->getIndexOperand()).getUInt();
 
             Interval* newShadow = ShadowContext::copyInterval(vectorShadow+index);//ShadowContext::getIntervalFromFloat(result.getFloat(0));
-            if(debug) cout << newShadow->lower() << " "	 << newShadow->upper() << endl;
+#ifdef DEBUG
+            cout << newShadow->lower() << " "	 << newShadow->upper() << endl;
+#endif
 
             shadowValues->setValue(instruction, newShadow);
 
@@ -1506,10 +1541,14 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
         	llvm::Type* type = instruction->getType();
         	if(!(type->isVectorTy() && type->getVectorElementType()->isFloatTy())) break;
 
-        	if(debug) cout << "got insert element" << endl;
+#ifdef DEBUG
+        	cout << "got insert element" << endl;
+#endif
 
         	unsigned index = workItem->getOperand(instruction->getOperand(2)).getUInt();
-        	if(debug) cout << index << endl;
+#ifdef DEBUG
+        	cout << index << endl;
+#endif
 
         	Interval* vectorShadow;
         	//element has to be float
@@ -1518,7 +1557,9 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
         	if(const llvm::UndefValue* undef = llvm::dyn_cast<const llvm::UndefValue>(instruction->getOperand(0))){
         		// is undef
-        		if(debug) cout << "operand 0 is undef" << endl;
+#ifdef DEBUG
+        		cout << "operand 0 is undef" << endl;
+#endif
         		newShadow = ShadowContext::getUninitializedInterval(type->getVectorNumElements());
         	}else{
         		vectorShadow = shadowContext.getValue(workItem, instruction->getOperand(0));
@@ -1536,7 +1577,9 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
             if(!(type->isVectorTy() && type->getVectorElementType()->isFloatTy())) break;
 
-            if(debug) cout << "got shuffle vector" << endl;
+#ifdef DEBUG
+            cout << "got shuffle vector" << endl;
+#endif
             const llvm::ShuffleVectorInst *shuffleInst = (const llvm::ShuffleVectorInst*)instruction;
 
 
@@ -1551,7 +1594,9 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
             if(const llvm::UndefValue* undef1 = llvm::dyn_cast<const llvm::UndefValue>(v1)){
 				// is undef
-				if(debug) cout << "operand 0 is undef" << endl;
+#ifdef DEBUG
+            	cout << "operand 0 is undef" << endl;
+#endif
 				vec1 = ShadowContext::getUninitializedInterval(type->getVectorNumElements());
 			}else{
 				vec1 = shadowContext.getValue(workItem, v1);
@@ -1559,7 +1604,9 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
 
             if(const llvm::UndefValue* undef2 = llvm::dyn_cast<const llvm::UndefValue>(v2)){
 				// is undef
-				if(debug) cout << "operand 1 is undef" << endl;
+#ifdef DEBUG
+            	cout << "operand 1 is undef" << endl;
+#endif
 				vec2 = ShadowContext::getUninitializedInterval(type->getVectorNumElements());
 			}else{
 				vec2 = shadowContext.getValue(workItem, v2);
@@ -1570,14 +1617,18 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             for(unsigned i = 0; i < mask.num; i++)
             {
             	int index = mask.getSInt(i);
-            	if(debug) cout << "index = " << index << endl;
+#ifdef DEBUG
+            	cout << "index = " << index << endl;
+#endif
             	if(index<num1){
             		newShadow[i] = vec1[index];
             	}else{
             		index -= num1;
             		newShadow[i] = vec2[index];
             	}
-            	if(debug) cout << newShadow[i].lower() << " " << newShadow[i].upper() << endl;
+#ifdef DEBUG
+            	cout << newShadow[i].lower() << " " << newShadow[i].upper() << endl;
+#endif
             }
 
             shadowValues->setValue(instruction, newShadow);
@@ -1594,13 +1645,17 @@ void FloatTest::instructionExecuted(const WorkItem *workItem,
             if(getElemInst->getType()->getPointerElementType()->isFloatTy()) cout << "got float pointer" << endl;
 
             size_t address = result.getPointer();
-			if(debug) cout << "address : " << address << endl;
+#ifdef DEBUG
+            cout << "address : " << address << endl;
+#endif
 
 			int n = 1;
 
 			if(type->isVectorTy()){
 				n = type->getVectorNumElements();
-				if(debug) cout << "num : " << n << endl;
+#ifdef DEBUG
+				cout << "num : " << n << endl;
+#endif
 			}
 
 
@@ -2402,7 +2457,9 @@ ShadowFrame::ShadowFrame() :
 
 ShadowFrame::~ShadowFrame()
 {
-	if(debug) cout << "before dest" << endl;
+#ifdef DEBUG
+	cout << "before dest" << endl;
+#endif
 	UnorderedIntervalMap::iterator mItr;
 
     // ugly
@@ -2414,7 +2471,9 @@ ShadowFrame::~ShadowFrame()
 
     delete m_values;
 
-    if(debug) cout << "after dest" << endl;
+#ifdef DEBUG
+    cout << "after dest" << endl;
+#endif
 
 #ifdef DUMP_SHADOW
     delete m_valuesList;
@@ -2564,7 +2623,9 @@ void ShadowMemory::allocate(size_t address)
 
 void ShadowMemory::clear()
 {
-	if(debug) cout << "before clear" << endl;
+#ifdef DEBUG
+	cout << "before clear" << endl;
+#endif
     MemoryMap::iterator mItr;
 
     // ugly
@@ -2584,7 +2645,9 @@ void ShadowMemory::clear()
         //m_map.erase(mItr);
     }
 
-    if(debug) cout << "after clear" << endl;
+#ifdef DEBUG
+    cout << "after clear" << endl;
+#endif
 }
 
 void ShadowMemory::deallocate(size_t address)
@@ -2679,7 +2742,9 @@ void ShadowMemory::store(Interval* inter, size_t address)
         }
 
         m_map.at(address) = inter;
-        if(debug) cout << "stored at : " << address << endl;
+#ifdef DEBUG
+        cout << "stored at : " << address << endl;
+#endif
     }else{
     	assert(false && "invalid address");
     }
@@ -2698,9 +2763,7 @@ ShadowContext::ShadowContext(unsigned bufferBits) :
 
 ShadowContext::~ShadowContext()
 {
-	if(debug) cout << "shadowContext dest" << endl;
     delete m_globalMemory;
-    if(debug) cout << "ok" << endl;
 }
 
 void ShadowContext::allocateWorkItems()
@@ -2836,10 +2899,14 @@ Interval* ShadowContext::getIntervalsFromDataVector(const llvm::ConstantDataVect
 	Interval* inter = new Interval[n];
 	for(unsigned int i=0; i<n; i++){
 		float val = vec->getElementAsFloat(i);
-		if(debug) cout << val << ' ';
+#ifdef DEBUG
+		cout << val << ' ';
+#endif
 		inter[i] = Interval(val);
 	}
-	if(debug) cout << endl;
+#ifdef DEBUG
+	cout << endl;
+#endif
 	return inter;
 }
 
